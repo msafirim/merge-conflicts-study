@@ -1,0 +1,1516 @@
+ID,Merge commit SHA,Parent1,Parent2,Merge Date,File,Branch Version,Base Version,Mainline Version,Comment,Conflict category,Mainline Commit SHA,Mainline change,Mainline project level,Mainline code level,Mainline version,Topic branch commit SHA,Toipic branch change,Topic branch project level,Topic branch code level,Topic branch code
+3,5717ac3cc67fbda09cf54828e14e463c3fe07566,210e101f6d7677e103b24beb33726a8ed8672c5f,8758c541b35bda1a6494ba703b450517027d5e9f,Wed Apr 19 10:12:11 CEST 2017,core/src/test/java/org/elasticsearch/search/aggregations/metrics/min/InternalMinTests.java,"double value = frequently() ? randomDouble() : randomFrom(new Double[] { Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY });         DocValueFormat formatter = randomFrom(new DocValueFormat.Decimal(""###.##""), DocValueFormat.BOOLEAN, DocValueFormat.RAW);         return new InternalMin(name, value, formatter, pipelineAggregators, metaData);","return new InternalMin(name, randomDouble(),
+randomFrom(DocValueFormat.BOOLEAN, DocValueFormat.GEOHASH, DocValueFormat.IP, DocValueFormat.RAW), pipelineAggregators, metaData);","return new InternalMin(name, randomDouble(), randomNumericDocValueFormat(), pipelineAggregators, metaData);",,Change of Method call or object creation,e71b26f480e7fc65c37a4862f49bd2cb54722bc3,Test improvement,Some aggregations tests were changed to use correct document field datatypes. The change was made to not test metrics aggregations (such as min or max) that expect a numeric value with a document field datatype such as IP (IPv4 and IPv6 addresses). The aggregations tests were modified so that not to return wrong aggregations which are also used in other tests.,"Listing below shows an example of a change in aggregations tests to use correct document field datatypes. In the example, a parameter that return random selected \texttt{\justify{DocValueFormat}} (document field datatype) was replaced with a method \texttt{\justify{randomNumericDocValueFormat}} that return random selected format from a list of datatype formats. The list of datatype formats contains Raw, Geohash, and IP datatypes.","     protected InternalMin createTestInstance(String name, List<PipelineAggregator> pipelineAggregators, Map<String, Object> metaData) {
+-        return new InternalMin(name, randomDouble(),
+-                randomFrom(DocValueFormat.BOOLEAN, DocValueFormat.GEOHASH, DocValueFormat.IP, DocValueFormat.RAW), pipelineAggregators,
+-                metaData);
++        return new InternalMin(name, randomDouble(), randomNumericDocValueFormat(), pipelineAggregators, metaData);
+     }",75fdc9449fd1d544cb56ae7e101f6ce323fc331d,Feature introduction,"Parsing from xContent, which is an abstraction on top of content such as Json, was added to some of the aggregations. The aggregations are max, min, avg, sum and value count. The change was part of high level REST client aggregations parsing feature implementation.","Listing below shows a change due to addition of xContent parsing to metrics aggregations. In the listing, test parameters for document’s field value and format were modified. The document’s field value was improved to randomly select infinity values. On the other hand, the document’s field format was updated to remove geohash format and replace with decimal format.","     protected InternalMin createTestInstance(String name, List<PipelineAggregator> pipelineAggregators, Map<String, Object> metaData) {
+-        return new InternalMin(name, randomDouble(),
+-                randomFrom(DocValueFormat.BOOLEAN, DocValueFormat.GEOHASH, DocValueFormat.IP, DocValueFormat.RAW), pipelineAggregators,
+-                metaData);
++        double value = frequently() ? randomDouble() : randomFrom(new Double[] { Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY });
++        DocValueFormat formatter = randomFrom(new DocValueFormat.Decimal(""###.##""), DocValueFormat.BOOLEAN, DocValueFormat.RAW);
++        return new InternalMin(name, value, formatter, pipelineAggregators, metaData);
+     }"
+19,d3417fb02291f26964d77767020ef345d18c148f,9ceb0f2cb4d49a090706d4f1e8a223b19ee0e064,179dd885e236d8f7ddfd4d4919e0be6a890743b8,Fri Nov 11 05:40:33 CET 2016,core/src/main/java/org/elasticsearch/action/delete/TransportDeleteAction.java,"public static WriteResult<DeleteResponse> executeDeleteRequestOnPrimary(DeleteRequest request, IndexShard indexShard) {         Engine.Delete delete = indexShard.prepareDeleteOnPrimary(request.type(), request.id(), request.version(), request.versionType());         indexShard.delete(delete);         // update the request with the version so it will go to the replicas         request.versionType(delete.versionType().versionTypeForReplicationAndRecovery());         request.version(delete.version());         request.seqNo(delete.seqNo());         assert request.versionType().validateVersionForWrites(request.version());         DeleteResponse response = new DeleteResponse(indexShard.shardId(), request.type(), request.id(), delete.seqNo(), delete.version(), delete.found());         return new WriteResult<>(response, delete.getTranslogLocation());","public static WriteResult<DeleteResponse> executeDeleteRequestOnPrimary(DeleteRequest request, IndexShard indexShard) {
+    Engine.Delete delete = indexShard.prepareDeleteOnPrimary(request.type(), request.id(), request.version(), request.versionType());
+    indexShard.delete(delete);
+    // update the request with the version so it will go to the replicas
+    request.versionType(delete.versionType().versionTypeForReplicationAndRecovery());
+    request.version(delete.version());
+
+    assert request.versionType().validateVersionForWrites(request.version());
+    DeleteResponse response = new DeleteResponse(indexShard.shardId(), request.type(), request.id(), delete.version(), delete.found());
+    return new WriteResult<>(response, delete.getTranslogLocation());","public static Engine.DeleteResult executeDeleteRequestOnPrimary(DeleteRequest request, IndexShard primary) {         final Engine.Delete delete = primary.prepareDeleteOnPrimary(request.type(), request.id(), request.version(), request.versionType());         return primary.delete(delete);",Two changes in the mainline,"Change of Method call or object creation, Addition of statements in the Same area","63c07282920b41576dc8fedaaf0add30caa86051, 5bac39dbec2f70382c9a6693d5d1a34c4ca4809d",Refactoring,"There are two changes from a common ancestor version that led to the merge conflict. In the first change, handling of write operation such as delete was simplified in transport actions that modify data in shards. With this change, failures occurred before executing engine’s write operations are conveyed through a failure operation type. The failure operation type can be request failure such as document version conflict, transient operation failure such as when initializing shard, and environment failure such as when there is out of disk error. This change was part of an enhancement to handle failure types appropriately since there was no distinction between environment and request failures for the write operation.
+
+In the second change, responsibilities to update document’s version and version type in a shard bulk request to shard replicas after delete operation on primary shards were moved to a caller of the operation. Before this change, update of the request version and version type on the shard replicas was done after execution of delete operation on the primary shard. This change was made to ensure an execution of write operation, that is, deletion of shards does not have side effects.","In order to handle the failures occurred before executing engine’s write operations appropriately, the return type of method \texttt{\justify{executeDeleteRequestOnPrimary}} was changed from \texttt{\justify{WriteResult<DeleteResponse>}} to \texttt{\justify{Engine.DeleteResult}} so that to distinguish failures occurred due to delete operation with engine level. In the second change, to ensure the execution of write operation does not have side effects, a \texttt{\justify{delete}} variable which holds preparation result of delete operation on primary shard was made final and response of the delete operation was returned to the operation caller. Furthermore, the request update responsibility was moved to the operation caller.","-    public static WriteResult<DeleteResponse> executeDeleteRequestOnPrimary(DeleteRequest request, IndexShard indexShard) {
+-        Engine.Delete delete = indexShard.prepareDeleteOnPrimary(request.type(), request.id(), request.version(), request.versionType());
+-        indexShard.delete(delete);
+-        // update the request with the version so it will go to the replicas
+-        request.versionType(delete.versionType().versionTypeForReplicationAndRecovery());
+-        request.version(delete.version());
+-
+-        assert request.versionType().validateVersionForWrites(request.version());
+-        DeleteResponse response = new DeleteResponse(indexShard.shardId(), request.type(), request.id(), delete.version(), delete.found());
+-        return new WriteResult<>(response, delete.getTranslogLocation());
++    public static Engine.DeleteResult executeDeleteRequestOnPrimary(DeleteRequest request, IndexShard primary) {
++        final Engine.Delete delete = primary.prepareDeleteOnPrimary(request.type(), request.id(), request.version(), request.versionType());
++        return primary.delete(delete);
+     }",5fb0f9a88ff40b3bc0f9fe81f181dd90ea76c6ea,Feature introduction,"A counter was added to each write operation (such as indexing) on a shard to enforce semantics of primary terms. The primary terms track number of times when a new primary shard is selected among existing replica shards after an old primary shard failed. The primary terms help to identify operations from the old failed primary shard. With this change, the counter was added to identify the write operations from the failed primary shard so that other shards should not execute the operations received from the failed primary shard. This is an enhancement to support implementation of write operations sequence numbers feature. The feature orders operations on shards against each other. Before the implementation of the feature, the ordering of operations was done on a per document basis and replicated to replica shards after write operations were applied on the primary shard. The ordering of operations on a per shard basis enable implementations of high level features such as changes API which allow to follow changes made to documents in the shard and index.","To enforce semantics of the primary terms, a counter \texttt{\justify{delete.seqNo()}} for delete operation on a primary shard was added. Then, the counter was passed to the sequence number assigned to \texttt{\justify{delete}} request on the primary shard. Furthermore, the \texttt{\justify{delete.seqNo()}} counter was passed to the response of delete action.","     public static WriteResult<DeleteResponse> executeDeleteRequestOnPrimary(DeleteRequest request, IndexShard indexShard) {
+         Engine.Delete delete = indexShard.prepareDeleteOnPrimary(request.type(), request.id(), request.version(), request.versionType());
+         indexShard.delete(delete);         
+        // update the request with the version so it will go to the replicas
+         request.versionType(delete.versionType().versionTypeForReplicationAndRecovery());
+         request.version(delete.version());
++        request.seqNo(delete.seqNo());
+ 
+         assert request.versionType().validateVersionForWrites(request.version());
+-        DeleteResponse response = new DeleteResponse(indexShard.shardId(), request.type(), request.id(), delete.version(), delete.found());
++        DeleteResponse response = new DeleteResponse(indexShard.shardId(), request.type(), request.id(), delete.seqNo(), delete.version(), delete.found());
+         return new WriteResult<>(response, delete.getTranslogLocation());
+     }"
+30,d3417fb02291f26964d77767020ef345d18c148f,9ceb0f2cb4d49a090706d4f1e8a223b19ee0e064,179dd885e236d8f7ddfd4d4919e0be6a890743b8,Fri Nov 11 05:40:33 CET 2016,core/src/main/java/org/elasticsearch/index/engine/InternalEngine.java,"if (checkVersionConflict(delete, currentVersion, expectedVersion, deleted)) return;             maybeUpdateSequenceNumber(delete);             final long updatedVersion = updateVersion(delete, currentVersion, expectedVersion);             final boolean found = deleteIfFound(delete, currentVersion, deleted, versionValue);             delete.updateVersion(updatedVersion, found);             maybeAddToTranslog(delete, updatedVersion, Translog.Delete::new, DeleteVersionValue::new);         } finally {             if (delete.seqNo() != SequenceNumbersService.UNASSIGNED_SEQ_NO) {                 seqNoService.markSeqNoAsCompleted(delete.seqNo());             }","if (checkVersionConflict(delete, currentVersion, expectedVersion, deleted)) return;
+final long updatedVersion = updateVersion(delete, currentVersion, expectedVersion);
+final boolean found = deleteIfFound(delete, currentVersion, deleted, versionValue);
+delete.updateVersion(updatedVersion, found);
+maybeAddToTranslog(delete, updatedVersion, Translog.Delete::new, DeleteVersionValue::new);
+} finally {
+  if (delete.seqNo() != SequenceNumbersService.UNASSIGNED_SEQ_NO) {
+     seqNoService.markSeqNoAsCompleted(delete.seqNo());","final DeleteResult deleteResult;             if (checkVersionConflict(delete, currentVersion, expectedVersion, deleted)) {                 // skip executing delete because of version conflict on recovery                 deleteResult = new DeleteResult(expectedVersion, true);             } else {                 updatedVersion = delete.versionType().updateVersion(currentVersion, expectedVersion);                 found = deleteIfFound(delete.uid(), currentVersion, deleted, versionValue);                 deleteResult = new DeleteResult(updatedVersion, found);                 location = delete.origin() != Operation.Origin.LOCAL_TRANSLOG_RECOVERY                         ? translog.add(new Translog.Delete(delete, deleteResult))                         : null;                 versionMap.putUnderLock(delete.uid().bytes()                         new DeleteVersionValue(updatedVersion, engineConfig.getThreadPool().estimatedTimeInMillis()));                 deleteResult.setTranslogLocation(location);             }             deleteResult.setTook(System.nanoTime() - delete.startTime());             deleteResult.freeze();             return deleteResult;",,Addition of statements in the Same area,"fa3ee6b996c16063e2de0dbcf080829f35cfa693, 1587a77ffd36e7017141e6e42e01090e9d928ef1",Refactoring,"Same as first change in mainline change led to conflict 2, which simplified handling of write operations failure.","To handle failure in case there is document’s version conflict while recovering from   \texttt{\justify{delete}} operation, the execution of the \texttt{\justify{delete}} operation is skipped and result of the operation \texttt{\justify{deleteResult}} is updated to the \texttt{\justify{delete.version()}} version after the \texttt{\justify{delete}} operation.","-    private void innerDelete(Delete delete) throws IOException {
++    private DeleteResult innerDelete(Delete delete) throws IOException {
+      ...
+             final long expectedVersion = delete.version();
+-            if (checkVersionConflict(delete, currentVersion, expectedVersion, deleted)) return;
+-            final long updatedVersion = updateVersion(delete, currentVersion, expectedVersion);
+-            final boolean found = deleteIfFound(delete, currentVersion, deleted, versionValue);
+-            delete.updateVersion(updatedVersion, found);
+-            maybeAddToTranslog(delete, updatedVersion, Translog.Delete::new, DeleteVersionValue::new);
++            final DeleteResult deleteResult;
++            if (checkVersionConflict(delete, currentVersion, expectedVersion, deleted)) {
++                // skip executing delete because of version conflict on recovery
++                deleteResult = new DeleteResult(expectedVersion, true);
++            } else {
++                updatedVersion = delete.versionType().updateVersion(currentVersion, expectedVersion);
++                found = deleteIfFound(delete.uid(), currentVersion, deleted, versionValue);
++                deleteResult = new DeleteResult(updatedVersion, found);
++                location = delete.origin() != Operation.Origin.LOCAL_TRANSLOG_RECOVERY
++                        ? translog.add(new Translog.Delete(delete, deleteResult))
++                        : null;
++                versionMap.putUnderLock(delete.uid().bytes(),
++                        new DeleteVersionValue(updatedVersion, engineConfig.getThreadPool().estimatedTimeInMillis()));
++                deleteResult.setTranslogLocation(location);
++            }
++            deleteResult.setTook(System.nanoTime() - delete.startTime());
++            deleteResult.freeze();
++            return deleteResult;
+         }
+     }",3106948ae1d85a1c3cb62cb9ba9dd8d42e693261,Feature introduction,"Local checkpoints were introduced on a shard level. A local checkpoint is a last sequence number after all previous operations were processed. The sequence numbers are incremented for each operation on the shard. Therefore, after previous operations were completed which have lower sequence numbers, the local checkpoint will have highest sequence number. The checkpoints were introduced to support implementation of write operations sequence numbers feature (see also \ref{conflict2_branch}).","As part of introduction of local checkpoints (highest sequence numbers on shard level), a \texttt{\justify{delete.seqNo()}} sequence number for delete operation is passed to \texttt{\justify{markSeqNoAsCompleted}} method which marks the sequence number as completed. The sequence number \texttt{\justify{delete.seqNo()}} needs to be assigned to a shard before marked as completed.","      private void innerDelete(Delete delete) throws IOException {
+          ...
+             final long expectedVersion = delete.version();
+             if (checkVersionConflict(delete, currentVersion, expectedVersion, deleted)) return;
+ 
++            maybeUpdateSequenceNumber(delete);
+             final long updatedVersion = updateVersion(delete, currentVersion, expectedVersion);
+-
+             final boolean found = deleteIfFound(delete, currentVersion, deleted, versionValue);
+-
+             delete.updateVersion(updatedVersion, found);
+ 
+             maybeAddToTranslog(delete, updatedVersion, Translog.Delete::new, DeleteVersionValue::new);
++        } finally {
++            if (delete.seqNo() != SequenceNumbersService.UNASSIGNED_SEQ_NO) {
++                seqNoService.markSeqNoAsCompleted(delete.seqNo());
++            }
+         }
+     }"
+36,d3417fb02291f26964d77767020ef345d18c148f,9ceb0f2cb4d49a090706d4f1e8a223b19ee0e064,179dd885e236d8f7ddfd4d4919e0be6a890743b8,Fri Nov 11 05:40:33 CET 2016,core/src/test/java/org/elasticsearch/index/IndexModuleTests.java,"IndexService indexService = module.newIndexService(nodeEnvironment, deleter, nodeServicesProvider, indicesQueryCache, mapperRegistry, shardId -> {} ,new IndicesFieldDataCache(settings, listener));","IndexService indexService = module.newIndexService(nodeEnvironment, deleter, nodeServicesProvider, indicesQueryCache, mapperRegistry, new IndicesFieldDataCache(settings, listener));
+        ",IndexService indexService = newIndexService(module);,,Change of Method call or object creation,6418f89feb55970c04474e3cced6ff1031725e39,Framework removal,"Provider of node services that hold index and node level services used by a shard was removed. The change was part of removing Guice dependency injection framework in the index level. After the change, the node services are provided were they are needed.","As part of node services provider removal in the index level, tests on index module were modified. The \texttt{\justify{nodeServicesProvider}} parameter was removed in the \texttt{\justify{newIndexService}} method which create new index service with custom implementations.","    public void testWrapperIsBound() throws IOException {
+        IndexModule module = new IndexModule(indexSettings, null,  new AnalysisRegistry(environment, emptyMap(), emptyMap(), emptyMap(), emptyMap()));
+        module.setSearcherWrapper((s) -> new Wrapper());
+        module.engineFactory.set(new MockEngineFactory(AssertingDirectoryReader.class));
+-       IndexService indexService = module.newIndexService(nodeEnvironment, deleter, nodeServicesProvider, indicesQueryCache, mapperRegistry, new IndicesFieldDataCache(settings, listener));
++       IndexService indexService = newIndexService(module);
+        assertTrue(indexService.getSearcherWrapper() instanceof Wrapper);
+        assertSame(indexService.getEngineFactory(), module.engineFactory.get());
+        indexService.close(""simon says"", false);
+    }",48443259217e431146c8d3b13c01cdd5ecd7a637,Feature introduction,"Global checkpoints were introduced to represent common part of history across shard replicas at a given time. The global checkpoints are updated by a primary shard. Similar to local checkpoints \ref{conflict3_branch}, a global checkpoint is a last sequence number after all previous operations were processed across shard replicas. ",Listing below shows a change in index module tests as part of global checkpoints introduction. A parameter \texttt{\justify{shardId -> \{\}}} was added when customizing index level services. The parameter injects shard ID to shard level components. ,"    public void testWrapperIsBound() throws IOException {
+        IndexModule module = new IndexModule(indexSettings, null,  new AnalysisRegistry(environment, emptyMap(), emptyMap(), emptyMap(), emptyMap()));
+        module.setSearcherWrapper((s) -> new Wrapper());
+        module.engineFactory.set(new MockEngineFactory(AssertingDirectoryReader.class));
+-       IndexService indexService = module.newIndexService(nodeEnvironment, deleter, nodeServicesProvider, indicesQueryCache, mapperRegistry, new IndicesFieldDataCache(settings, listener));
++       IndexService indexService = module.newIndexService(nodeEnvironment, deleter, nodeServicesProvider, indicesQueryCache,
++               mapperRegistry, shardId -> {} ,new IndicesFieldDataCache(settings, listener));
+        assertTrue(indexService.getSearcherWrapper() instanceof Wrapper);
+        assertSame(indexService.getEngineFactory(), module.engineFactory.get());
+        indexService.close(""simon says"", false);
+    }"
+43,d3417fb02291f26964d77767020ef345d18c148f,9ceb0f2cb4d49a090706d4f1e8a223b19ee0e064,179dd885e236d8f7ddfd4d4919e0be6a890743b8,Fri Nov 11 05:40:33 CET 2016,core/src/test/java/org/elasticsearch/index/engine/InternalEngineTests.java,"index = new Engine.Index(newUid(""1""), doc, index.seqNo(), index.version(), index.versionType().versionTypeForReplicationAndRecovery(), REPLICA, 0, -1, false);         replicaEngine.index(index);         assertThat(index.version(), equalTo(1L));","index = new Engine.Index(newUid(""1""), doc, index.version(), index.versionType().versionTypeForReplicationAndRecovery(), REPLICA, 0, -1, false);
+replicaEngine.index(index);
+assertThat(index.version(), equalTo(1L));","index = new Engine.Index(newUid(""1""), doc, indexResult.getVersion(), index.versionType().versionTypeForReplicationAndRecovery(), REPLICA, 0, -1, false);         indexResult = replicaEngine.index(index);         assertThat(indexResult.getVersion(), equalTo(1L));",,Change of Method call or object creation,1587a77ffd36e7017141e6e42e01090e9d928ef1,Refactoring,"Index operation on shard level was made immutable. To make the index operation immutable, a result of the index operation is logged before returning response. The result contains the following data; transaction log location, index version, index status, index time, and index estimated size. This change was part of simplifying handling of write operations failure (see \ref{conflict2_mainline}).","Listing below shows changes as part of making index operation immutable. A test on versioning new index compares primary index and its replica. As part of making index operation immutable, a variable \texttt{\justify{indexResult}} is assigned to result of indexing \texttt{\justify{index}}. ","     public void testVersioningNewIndex() {
+         ParsedDocument doc = testParsedDocument(""1"", ""1"", ""test"", null, -1, -1, testDocument(), B_1, null);
+         Engine.Index index = new Engine.Index(newUid(""1""), doc);
+-        engine.index(index);
+-        assertThat(index.version(), equalTo(1L));
++        Engine.IndexResult indexResult = engine.index(index);
++        assertThat(indexResult.getVersion(), equalTo(1L));
+ 
+-        index = new Engine.Index(newUid(""1""), doc, index.version(), index.versionType().versionTypeForReplicationAndRecovery(), REPLICA, 0, -1, false);
+-        replicaEngine.index(index);
+-        assertThat(index.version(), equalTo(1L));
++        index = new Engine.Index(newUid(""1""), doc, indexResult.getVersion(), index.versionType().versionTypeForReplicationAndRecovery(), REPLICA, 0, -1, false);
++        indexResult = replicaEngine.index(index);
++        assertThat(indexResult.getVersion(), equalTo(1L));
+     }",5fb0f9a88ff40b3bc0f9fe81f181dd90ea76c6ea,Feature introduction,Same as \ref{conflict2_branch}.,Listing below shows a change to enforce semantics of the primary terms. A counter \texttt{\justify{index.seqNo()}} for index operation on a primary shard was passed as a parameter when adding an index replica \texttt{\justify{index}}.,"     public void testVersioningNewIndex() {
+         ParsedDocument doc = testParsedDocument(""1"", ""1"", ""test"", null, -1, -1, testDocument(), B_1, null);
+         Engine.Index index = new Engine.Index(newUid(""1""), doc);
+         engine.index(index);
+         assertThat(index.version(), equalTo(1L));
+ 
+-        index = new Engine.Index(newUid(""1""), doc, index.version(), index.versionType().versionTypeForReplicationAndRecovery(), REPLICA, 0, -1, false);
++        index = new Engine.Index(newUid(""1""), doc, index.seqNo(), index.version(), index.versionType().versionTypeForReplicationAndRecovery(), REPLICA, 0, -1, false);
+         replicaEngine.index(index);
+         assertThat(index.version(), equalTo(1L));
+     }"
+70,d3417fb02291f26964d77767020ef345d18c148f,9ceb0f2cb4d49a090706d4f1e8a223b19ee0e064,179dd885e236d8f7ddfd4d4919e0be6a890743b8,Fri Nov 11 05:40:33 CET 2016,core/src/test/java/org/elasticsearch/index/engine/InternalEngineTests.java,"Engine.Index firstIndexRequest = new Engine.Index(newUid(Integer.toString(i)), doc, SequenceNumbersService.UNASSIGNED_SEQ_NO, Versions.MATCH_DELETED, VersionType.INTERNAL, PRIMARY, System.nanoTime(), -1, false);             engine.index(firstIndexRequest);             assertThat(firstIndexRequest.version(), equalTo(1L));","Engine.Index firstIndexRequest = new Engine.Index(newUid(Integer.toString(i)), doc, Versions.MATCH_DELETED, VersionType.INTERNAL, PRIMARY, System.nanoTime(), -1, false);
+            engine.index(firstIndexRequest);
+            assertThat(firstIndexRequest.version(), equalTo(1L));","Engine.Index firstIndexRequest = new Engine.Index(newUid(Integer.toString(i)), doc, Versions.MATCH_DELETED, VersionType.INTERNAL, PRIMARY, System.nanoTime(), -1, false);             Engine.IndexResult indexResult = engine.index(firstIndexRequest);             assertThat(indexResult.getVersion(), equalTo(1L));",,Change of Method call or object creation,1587a77ffd36e7017141e6e42e01090e9d928ef1,Refactoring,Same as \ref{conflict5_mainline}.,"Listing below shows a test to replay transaction log after \texttt{\justify{index}} operation failure. To make index operation immutable, result of indexing indexing operation is assigned to a variable \texttt{\justify{indexResult}}.","      public void testTranslogReplayWithFailure() throws IOException {
+        final int numDocs = randomIntBetween(1, 10);         
+        for (int i = 0; i < numDocs; i++) {
+             ParsedDocument doc = testParsedDocument(Integer.toString(i), Integer.toString(i), ""test"", null, -1, -1, testDocument(), new BytesArray(""{}""), null);
+             Engine.Index firstIndexRequest = new Engine.Index(newUid(Integer.toString(i)), doc, Versions.MATCH_DELETED, VersionType.INTERNAL, PRIMARY, System.nanoTime(), -1, false);
+-            engine.index(firstIndexRequest);
+-            assertThat(firstIndexRequest.version(), equalTo(1L));
++            Engine.IndexResult indexResult = engine.index(firstIndexRequest);
++            assertThat(indexResult.getVersion(), equalTo(1L));
+         }
+        ...
+     }",5fb0f9a88ff40b3bc0f9fe81f181dd90ea76c6ea,Feature introduction,Same as \ref{conflict2_branch}.,"In the listing below, a counter \texttt{\justify{SequenceNumbersService.UNASSIGNED\_SEQ\_NO}}, which track unassigned primary terms due to failure, was passed as parameter when creating an index. The code tests replaying transaction log after \texttt{\justify{index}} operation failure.","      public void testTranslogReplayWithFailure() throws IOException {
+         final int numDocs = randomIntBetween(1, 10);
+         for (int i = 0; i < numDocs; i++) {
+             ParsedDocument doc = testParsedDocument(Integer.toString(i), Integer.toString(i), ""test"", null, -1, -1, testDocument(), new BytesArray(""{}""), null);
+-            Engine.Index firstIndexRequest = new Engine.Index(newUid(Integer.toString(i)), doc, Versions.MATCH_DELETED, VersionType.INTERNAL, PRIMARY, System.nanoTime(), -1, false);
++            Engine.Index firstIndexRequest = new Engine.Index(newUid(Integer.toString(i)), doc, SequenceNumbersService.UNASSIGNED_SEQ_NO, Versions.MATCH_DELETED, VersionType.INTERNAL, PRIMARY, System.nanoTime(), -1, false);
+             engine.index(firstIndexRequest);
+             assertThat(firstIndexRequest.version(), equalTo(1L));
+         }
+         ...
+     }"
+109,25fd9e26c4fb042d6f6dea14efcd239577bdbbc4,c809671eb3a4ee113e337bc5f63ce5283017a17a,85402d5220d86ecebf6f2332a9743e717016ce24,Thu Sep 29 00:22:31 CEST 2016,core/src/main/java/org/elasticsearch/index/shard/TranslogRecoveryPerformer.java,".routing(index.routing()).parent(index.parent()).timestamp(index.timestamp()).ttl(index.ttl()), index.seqNo(),                         index.version(), index.versionType().versionTypeForReplicationAndRecovery(), origin);",".routing(index.routing()).parent(index.parent()).timestamp(index.timestamp()).ttl(index.ttl()),
+                        index.version(), index.versionType().versionTypeForReplicationAndRecovery(), origin);",".routing(index.routing()).parent(index.parent()).timestamp(index.timestamp()).ttl(index.ttl()), index.seqNo(), index.version(), index.versionType().versionTypeForReplicationAndRecovery(), origin, index.getAutoGeneratedIdTimestamp(), true);",,Change of Method call or object creation,a0becd26b1b262efe739b343f108f229b0384c2f,Feature enhancement,"Adding documents with autogenerated IDs (IDs generated automatically by Elasticsearch during data indexing) to the index was optimized for append-only use case to improve performance. One of the append-only use case is when indexing operation is not completed and a request is sent again since a sending node did not receive response whether the operation was successful or not. This can lead to duplicate requests in the receiving node (node with primary shard). To optimize the request in this case, a timestamp was added for each request to allow identification of failed requests. The timestamp allows to compare the retried request’s timestamp with engine timestamp and if the engine timestamp is lower than request timestamp, it means there is no retried request with the same timestamp that has been run before. Therefore, it is safe for engine to execute the request which is optimized for performance.",Listing below shows a change which is part of optimizing documents indexing with the autogenerated ID for append only case. A parameter \texttt{\justify{index.getAutoGeneratedIdTimestamp()}} was added in a method \texttt{\justify{prepareIndex}} which prepare document for indexing. ,"     private void performRecoveryOperation(Engine engine, Translog.Operation operation, boolean allowMappingUpdates, Engine.Operation.Origin origin) {
++
+         try {
+             switch (operation.opType()) {
+                 case INDEX:
+                     ...                    
+                     Engine.Index engineIndex = IndexShard.prepareIndex(docMapper(index.type()), source(shardId.getIndexName(), index.type(), index.id(), index.source())
+                             .routing(index.routing()).parent(index.parent()).timestamp(index.timestamp()).ttl(index.ttl()),
+-                        index.version(), index.versionType().versionTypeForReplicationAndRecovery(), origin);
++                        index.version(), index.versionType().versionTypeForReplicationAndRecovery(), origin, index.getAutoGeneratedIdTimestamp(), true);
+                     maybeAddMappingUpdate(engineIndex.type(), engineIndex.parsedDoc().dynamicMappingsUpdate(), engineIndex.id(), allowMappingUpdates);
+                    ...
+            }
+        ...
+    }",5fb0f9a88ff40b3bc0f9fe81f181dd90ea76c6ea,Feature introduction,Same as \ref{conflict2_branch}.,"Listing below shows a change to enforce semantic of primary terms. A counter \texttt{\justify{index.seqNo()}} for index operation was added as parameter in method  \texttt{\justify{prepareIndex}}, which prepares \texttt{\justify{index}} for indexing. ","     private void performRecoveryOperation(Engine engine, Translog.Operation operation, boolean allowMappingUpdates, Engine.Operation.Origin origin) {
+         try {
+             switch (operation.opType()) {
+                 case INDEX:
+                     Translog.Index index = (Translog.Index) operation;
+                     Engine.Index engineIndex = IndexShard.prepareIndex(docMapper(index.type()), source(shardId.getIndexName(), index.type(), index.id(), index.source())
+-                            .routing(index.routing()).parent(index.parent()).timestamp(index.timestamp()).ttl(index.ttl()),
++                            .routing(index.routing()).parent(index.parent()).timestamp(index.timestamp()).ttl(index.ttl()), index.seqNo(),
+                         index.version(), index.versionType().versionTypeForReplicationAndRecovery(), origin);
+                     maybeAddMappingUpdate(engineIndex.type(), engineIndex.parsedDoc().dynamicMappingsUpdate(), engineIndex.id(), allowMappingUpdates);
+                     if (logger.isTraceEnabled()) {
+                    ...
+            }
+        ...
+    }"
+124,25fd9e26c4fb042d6f6dea14efcd239577bdbbc4,c809671eb3a4ee113e337bc5f63ce5283017a17a,85402d5220d86ecebf6f2332a9743e717016ce24,Thu Sep 29 00:22:31 CEST 2016,core/src/test/java/org/elasticsearch/index/translog/TranslogTests.java,"assertEquals(ex.getMessage(), ""Checkpoint file translog-2.ckp already exists but has corrupted content expected: Checkpoint{offset=2738, numOps=55, translogFileGeneration= 2} but got: Checkpoint{offset=0, numOps=0, translogFileGeneration= 0}"");","assertEquals(ex.getMessage(), ""Checkpoint file translog-2.ckp already exists but has corrupted content expected: Checkpoint{offset=2683, numOps=55, translogFileGeneration= 2} but got: Checkpoint{offset=0, numOps=0, translogFileGeneration= 0}"");
+        ","assertEquals(ex.getMessage(), ""Checkpoint file translog-2.ckp already exists but has corrupted content expected: Checkpoint{offset=3123, numOps=55, translogFileGeneration= 2} but got: Checkpoint{offset=0, numOps=0, translogFileGeneration= 0}"");",,Change of an assert statement Expression,a0becd26b1b262efe739b343f108f229b0384c2f,Feature enhancement,Same as \ref{conflict7_mainline}.,"Listing below shows a change as part of optimizing documents indexing with the autogenerated ID for append only case. In the listing, an exception message \texttt{\justify{ex.getMessage()}} was updated to reflect optimization of the documents indexing.","    public void testRecoveryUncommittedCorruptedCheckpoint() throws IOException {
+         ...
+         try (Translog translog = new Translog(config, translogGeneration)) {
+             fail(""corrupted"");
+         } catch (IllegalStateException ex) {
+-            assertEquals(ex.getMessage(), ""Checkpoint file translog-2.ckp already exists but has corrupted content expected: Checkpoint{offset=2683, numOps=55, translogFileGeneration= 2} but got: Checkpoint{offset=0, numOps=0, translogFileGeneration= 0}"");
++            assertEquals(ex.getMessage(), ""Checkpoint file translog-2.ckp already exists but has corrupted content expected: Checkpoint{offset=3123, numOps=55, translogFileGeneration= 2} but got: Checkpoint{offset=0, numOps=0, translogFileGeneration= 0}"");
+         }
+         Checkpoint.write(FileChannel::open, config.getTranslogPath().resolve(Translog.getCommitCheckpointFileName(read.generation)), read, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+         try (Translog translog = new Translog(config, translogGeneration)) {
+        ...
+    }",5fb0f9a88ff40b3bc0f9fe81f181dd90ea76c6ea,Feature introduction,Same as \ref{conflict2_branch}.,"As part of a change to enforce semantics of primary terms, an exception message \texttt{\justify{ex.getMessage()}} was updated when testing recovery of corrupted translogs that were not committed due to some cases such as user error. In the message, an offset is updated to reflect changes added to enforce semantics of the primary terms.","    public void testRecoveryUncommittedCorruptedCheckpoint() throws IOException {
+         ...
+         try (Translog translog = new Translog(config, translogGeneration)) {
+             fail(""corrupted"");
+         } catch (IllegalStateException ex) {
+-            assertEquals(ex.getMessage(), ""Checkpoint file translog-2.ckp already exists but has corrupted content expected: Checkpoint{offset=2683, numOps=55, translogFileGeneration= 2} but got: Checkpoint{offset=0, numOps=0, translogFileGeneration= 0}"");
++            assertEquals(ex.getMessage(), ""Checkpoint file translog-2.ckp already exists but has corrupted content expected: Checkpoint{offset=2738, numOps=55, translogFileGeneration= 2} but got: Checkpoint{offset=0, numOps=0, translogFileGeneration= 0}"");
+         }
+         Checkpoint.write(FileChannel::open, config.getTranslogPath().resolve(Translog.getCommitCheckpointFileName(read.generation)), read, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+         try (Translog translog = new Translog(config, translogGeneration)) {
+        ...
+    }"
+130,d0765d07619e644679fe426580229608eaabeeb3,9884b7dc71b06c472922438d3513a5b1102992eb,74af0e36f3bc6b7f3315ba23463fca78997d60aa,Wed Jul 06 04:01:07 CEST 2016,core/src/main/java/org/elasticsearch/action/support/replication/TransportReplicationAction.java,"ReplicaResult result;             try (ShardReference replica = getReplicaShardReference(request.shardId(), request.primaryTerm())) {                 result = shardOperationOnReplica(request);                 response = new ReplicaResponse(replica.routingEntry().allocationId().getId(), replica.getLocalCheckpoint());             }             result.respond(new ResponseListener(response));","ReplicaResult result;
+try (Releasable ignored = acquireReplicaOperationLock(request.shardId(), request.primaryTerm())) {
+    result = shardOperationOnReplica(request);
+}
+result.respond(new ResponseListener());","acquireReplicaOperationLock(request.shardId(), request.primaryTerm(), this);",,Addition and removal of statements ,b4064ce43fc43fecc2b63c63c0d27d52f4656f16,Bug fix,The blocking of indexing operations during primary shard relocation was modified to put operations which cannot be executed during the relocation phase on a queue. The operations on the queue will be executed once the primary shard relocation is completed. This change was made to fix a situation that can lead to a deadlock when the primary shard relocation and indexing operations on the primary shard occurs concurrently.,Listing below shows changes which are part of fixing the deadlock situation during primary shard relocation. The replication of indexed \texttt{\justify{result}} to the replica shard was removed during the primary shard relocation. ,"         protected void doRun() throws Exception {
+             setPhase(task, ""replica"");
+             assert request.shardId() != null : ""request shardId must be set"";
+-            ReplicaResult result;
+-            try (Releasable ignored = acquireReplicaOperationLock(request.shardId(), request.primaryTerm())) {
+-                result = shardOperationOnReplica(request);
+-            }
+-            result.respond(new ResponseListener());
++            acquireReplicaOperationLock(request.shardId(), request.primaryTerm(), this);
+         }",48443259217e431146c8d3b13c01cdd5ecd7a637,Feature introduction,Same as \ref{conflict4_branch} which introduced global checkpoints that identify common history across replica shards at a given time. ,The listing below shows changes which capture the \texttt{\justify{response}} of the replication of indexed \texttt{\justify{result}} to replica shards. The \texttt{\justify{response}} contains local checkpoints of the replica shards. Then the \texttt{\justify{response}} is passed to the replication response. ,"         protected void doRun() throws Exception {
+             setPhase(task, ""replica"");
++            final ReplicaResponse response;
+             assert request.shardId() != null : ""request shardId must be set"";
+             ReplicaResult result;
+-            try (Releasable ignored = acquireReplicaOperationLock(request.shardId(), request.primaryTerm())) {
++            try (ShardReference replica = getReplicaShardReference(request.shardId(), request.primaryTerm())) {
+                 result = shardOperationOnReplica(request);
++                response = new ReplicaResponse(replica.routingEntry().allocationId().getId(), replica.getLocalCheckpoint());
+             }
+-            result.respond(new ResponseListener());
++            result.respond(new ResponseListener(response));
+         }"
+141,112669daedf3a4b92f70bf982b34f48ca56c303a,275ea6837d6fc1398c4bfe453650c7a4c9330a0c,0cae9ad30eb8fed74c6396a73343e83bc8547f73,Thu Jun 23 17:52:11 CEST 2016,core/src/main/java/org/elasticsearch/index/engine/InternalEngine.java,"long updatedVersion;             long expectedVersion = delete.version();             if (delete.versionType().isVersionConflictForWrites(currentVersion, expectedVersion, deleted)) {                 if (delete.origin().isRecovery()) {                     return;                 } else {                     throw new VersionConflictEngineException(shardId, delete.type(), delete.id(),                         delete.versionType().explainConflictForWrites(currentVersion, expectedVersion, deleted));                 }             }             updatedVersion = delete.versionType().updateVersion(currentVersion, expectedVersion);             if (delete.origin() == Operation.Origin.PRIMARY) {                 delete.updateSeqNo(seqNoService.generateSeqNo());             }             final boolean found;             if (currentVersion == Versions.NOT_FOUND) {                 // doc does not exist and no prior deletes                 found = false;             } else if (versionValue != null && versionValue.delete()) {                 // a ""delete on delete"", in this case, we still increment the version, log it, and return that version                 found = false;             } else {                 // we deleted a currently existing document                 indexWriter.deleteDocuments(delete.uid());                 found = true;             }","long updatedVersion;
+long expectedVersion = delete.version();
+if (delete.versionType().isVersionConflictForWrites(currentVersion, expectedVersion, deleted)) {
+    if (delete.origin().isRecovery()) {
+        return;
+    } else {
+        throw new VersionConflictEngineException(shardId, delete.type(), delete.id(),
+                delete.versionType().explainConflictForWrites(currentVersion, expectedVersion, deleted));
+    }
+}
+updatedVersion = delete.versionType().updateVersion(currentVersion, expectedVersion);
+final boolean found;
+if (currentVersion == Versions.NOT_FOUND) {
+    // doc does not exist and no prior deletes
+    found = false;
+} else if (versionValue != null && versionValue.delete()) {
+    // a ""delete on delete"", in this case, we still increment the version, log it, and return that version
+    found = false;
+} else {
+    // we deleted a currently existing document
+    indexWriter.deleteDocuments(delete.uid());
+    found = true;
+}","final long expectedVersion = delete.version();             if (checkVersionConflict(delete, currentVersion, expectedVersion, deleted)) return;             final long updatedVersion = updateVersion(delete, currentVersion, expectedVersion);             final boolean found = deleteIfFound(delete, currentVersion, deleted, versionValue);",,Addition of statements in the Same area,4f49a261a748b6fa75e0da46b11f4f4a8011ab47,Refactoring,"Internal engine’s inner index and delete methods were refactored to extract common logic into single method. The refactoring was done to shrink the bytecode size of the inner index method so that the method can be inlined, that is, optimization of method call done by just-in-time (JIT) compiler.","The listing below shows changes which are part of common logic extraction from the internal engine’s inner index and delete methods. The listing shows the extraction of the common logic for checking version conflicts from the inner delete method. In the listing, the condition \texttt{\justify{delete.versionType().isVersionConflictForWrites(currentVersion, expectedVersion, deleted)}} which check if there is version conflict for delete operation was extracted to a shared method  \texttt{\justify{checkVersionConflict}} that returns a boolean if there is conflict for the delete and index operations. For example, the condition \texttt{\justify{checkVersionConflict(delete, currentVersion, expectedVersion, deleted)}} returns a boolean for the delete operation.","     private void innerDelete(Delete delete) throws IOException {
+         try (Releasable ignored = acquireLock(delete.uid())) {
+             ... 
+-            long updatedVersion;
+-            long expectedVersion = delete.version();
+-            if (delete.versionType().isVersionConflictForWrites(currentVersion, expectedVersion, deleted)) {
+-                if (delete.origin().isRecovery()) {
+-                    return;
+-                } else {
+-                    throw new VersionConflictEngineException(shardId, delete.type(), delete.id(),
+-                            delete.versionType().explainConflictForWrites(currentVersion, expectedVersion, deleted));
+-                }
+-            }
+-            updatedVersion = delete.versionType().updateVersion(currentVersion, expectedVersion);
+-            final boolean found;
+-            if (currentVersion == Versions.NOT_FOUND) {
+-                // doc does not exist and no prior deletes
+-                found = false;
+-            } else if (versionValue != null && versionValue.delete()) {
+-                // a ""delete on delete"", in this case, we still increment the version, log it, and return that version
+-                found = false;
+-            } else {
+-                // we deleted a currently existing document
+-                indexWriter.deleteDocuments(delete.uid());
+-                found = true;
+-            }
++            final long expectedVersion = delete.version();
++            if (checkVersionConflict(delete, currentVersion, expectedVersion, deleted)) return;
++
++            final long updatedVersion = updateVersion(delete, currentVersion, expectedVersion);
++
++            final boolean found = deleteIfFound(delete, currentVersion, deleted, versionValue);
+ 
+             delete.updateVersion(updatedVersion, found);
+ 
+-            if (delete.origin() != Operation.Origin.LOCAL_TRANSLOG_RECOVERY) {
+-                final Translog.Location translogLocation = translog.add(new Translog.Delete(delete));
+-                delete.setTranslogLocation(translogLocation);
+-                versionMap.putUnderLock(delete.uid().bytes(), new DeleteVersionValue(updatedVersion, engineConfig.getThreadPool().estimatedTimeInMillis(), delete.getTranslogLocation()));
+-            } else {
+-                // we do not replay in to the translog, so there is no
+-                // translog location; that is okay because real-time
+-                // gets are not possible during recovery and we will
+-                // flush when the recovery is complete
+-                versionMap.putUnderLock(delete.uid().bytes(), new DeleteVersionValue(updatedVersion, engineConfig.getThreadPool().estimatedTimeInMillis(), null));
+-            }
++            maybeAddToTranslog(delete, updatedVersion, Translog.Delete::new, DeleteVersionValue::new);
++        }
++    }",3106948ae1d85a1c3cb62cb9ba9dd8d42e693261,Feature introduction,Same as first change in \ref{conflict3_branch} which introduced local checkpoints.,"In the listing below, the condition \texttt{\justify{delete.origin() == Operation.Origin.PRIMARY}} was introduced when updating the sequence number for the \texttt{\justify{delete}} operation to check if the origin of the delete operation is the primary shard. The sequence number (see \ref{conflict2_branch}) is the counter which is added to each write operation run on the shard to identify operations that are coming from the old failed primary shard. The last sequence number is used as the local checkpoint in the replica shards and then sent to the primary shards which update its global checkpoints (see \ref{conflict4_branch}). ","     private void innerDelete(Delete delete) throws IOException {
+         try (Releasable ignored = acquireLock(delete.uid())) {
+             ...
+ 
+             long updatedVersion;
+             long expectedVersion = delete.version();
+             if (delete.versionType().isVersionConflictForWrites(currentVersion, expectedVersion, deleted)) {
+                 if (delete.origin().isRecovery()) {
+                     return;
+                 } else {
+                     throw new VersionConflictEngineException(shardId, delete.type(), delete.id(),
+-                            delete.versionType().explainConflictForWrites(currentVersion, expectedVersion, deleted));
++                        delete.versionType().explainConflictForWrites(currentVersion, expectedVersion, deleted));
+                 }
+             }
+             updatedVersion = delete.versionType().updateVersion(currentVersion, expectedVersion);
++
++            if (delete.origin() == Operation.Origin.PRIMARY) {
++                delete.updateSeqNo(seqNoService.generateSeqNo());
++            }
++
+             final boolean found;
+             ...
+         }
+     }"
+162,bbd5f26d45c5e905a237375bae7a0df98ae0bfad,6380560dbb989242e48f68719fe6045c51f7017e,d55f719f8abe56a25f9d78999ef356a260599a78,Fri Jun 03 19:32:03 CEST 2016,core/src/main/java/org/elasticsearch/common/settings/Settings.java,"PropertyPlaceholder propertyPlaceholder = new PropertyPlaceholder(""${"", ""}"", false);             PropertyPlaceholder.PlaceholderResolver placeholderResolver = new PropertyPlaceholder.PlaceholderResolver() {                     @Override                     public String resolvePlaceholder(String placeholderName) {                         if (placeholderName.startsWith(""env."")) {                             // explicit env var prefix                             return System.getenv(placeholderName.substring(""env."".length()));                         }                         String value = System.getProperty(placeholderName);                         if (value != null) {                             return value;                         }                         value = System.getenv(placeholderName);                         if (value != null) {                             return value;                         }                         return map.get(placeholderName);                     }                     @Override                     public boolean shouldIgnoreMissing(String placeholderName) {                         // if its an explicit env var, we are ok with not having a value for it and treat it as optional                         if (placeholderName.startsWith(""env."") || placeholderName.startsWith(""prompt."")) {                             return true;                         }                         return false;                     }                     @Override                     public boolean shouldRemoveMissingPlaceholder(String placeholderName) {                         if (placeholderName.startsWith(""prompt."")) {                             return false;                         }                         return true;                     }                 };             Iterator<Map.Entry<String, String>> entryItr = map.entrySet().iterator();             while (entryItr.hasNext()) {                 Map.Entry<String, String> entry = entryItr.next();                 if (entry.getValue() == null) {                     // a null value obviously can't be replaced                     continue;                 }                 String value = propertyPlaceholder.replacePlaceholders(entry.getValue(), placeholderResolver);                 // if the values exists and has length, we should maintain it  in the map                 // otherwise, the replace process resolved into removing it                 if (Strings.hasLength(value)) {                     entry.setValue(value);                 } else {                     entryItr.remove();                 }             }             return this;","public Builder replacePropertyPlaceholders() {
+            PropertyPlaceholder propertyPlaceholder = new PropertyPlaceholder(""""${"""", """"}"""", false);
+            PropertyPlaceholder.PlaceholderResolver placeholderResolver = new PropertyPlaceholder.PlaceholderResolver() {
+                    @Override
+                    public String resolvePlaceholder(String placeholderName) {
+                        if (placeholderName.startsWith(""""env."""")) {
+                            // explicit env var prefix
+                            return System.getenv(placeholderName.substring(""""env."""".length()));
+                        }
+                        String value = System.getProperty(placeholderName);
+                        if (value != null) {
+                            return value;
+                        }
+                        value = System.getenv(placeholderName);
+                        if (value != null) {
+                            return value;
+                        }
+                        return map.get(placeholderName);
+                    }
+
+                    @Override
+                    public boolean shouldIgnoreMissing(String placeholderName) {
+                        // if its an explicit env var, we are ok with not having a value for it and treat it as optional
+                        if (placeholderName.startsWith(""""env."""") || placeholderName.startsWith(""""prompt."""")) {
+                            return true;
+                        }
+                        return false;
+                    }
+
+                    @Override
+                    public boolean shouldRemoveMissingPlaceholder(String placeholderName) {
+                        if (placeholderName.startsWith(""""prompt."""")) {
+                            return false;
+                        }
+                        return true;
+                    }
+                };
+            for (Map.Entry<String, String> entry : new HashMap<>(map).entrySet()) {
+                String value = propertyPlaceholder.replacePlaceholders(entry.getKey(), entry.getValue(), placeholderResolver);
+                // if the values exists and has length, we should maintain it  in the map
+                // otherwise, the replace process resolved into removing it
+                if (Strings.hasLength(value)) {
+                    map.put(entry.getKey(), value);
+                } else {
+                    map.remove(entry.getKey());
+                }
+            }
+            return this;
+}
+",return replacePropertyPlaceholders(System::getenv);,,Addition and removal of statements ,ba14aca2185ef578280f8b05516794423d9a24e0,Test improvement,Use of environment variables in replacing property placeholders (settings set when building xContent) was refactored so that tests can mock the behavior they need by obtaining environment variables without depending on external environment variables.,"Listing below shows a change to make environment variables visible to tests. A method \texttt{\justify{replacePropertyPlaceholders}} was split to implement visibility of the environment variables to tests without depending on external environment variables. One method was made \texttt{\justify{public}} and it delegates environment variables to the other method visible in the package.  Tests can mock required behavior using the method visible in the package. In this way, tests do not rely on external environment variables.","+        public Builder replacePropertyPlaceholders() {
++            return replacePropertyPlaceholders(System::getenv);
+         }
+         ...
+-        public Builder replacePropertyPlaceholders() {
++        // visible for testing
++        Builder replacePropertyPlaceholders(Function<String, String> getenv) {
+             PropertyPlaceholder propertyPlaceholder = new PropertyPlaceholder(""${"", ""}"", false);
+             PropertyPlaceholder.PlaceholderResolver placeholderResolver = new PropertyPlaceholder.PlaceholderResolver() {
+-                    @Override
+-                    public String resolvePlaceholder(String placeholderName) {
+-                        if (placeholderName.startsWith(""env."")) {
+-                            // explicit env var prefix
+-                            return System.getenv(placeholderName.substring(""env."".length()));
+-                        }
+-                        String value = System.getProperty(placeholderName);
+-                        if (value != null) {
+-                            return value;
+-                        }
+-                        value = System.getenv(placeholderName);
+-                        if (value != null) {
+-                            return value;
+-                        }
+-                        return map.get(placeholderName);
++                @Override
++                public String resolvePlaceholder(String placeholderName) {
++                    final String value = getenv.apply(placeholderName);
++                    if (value != null) {
++                        return value;
+                     }
++                    return map.get(placeholderName);
++                }
+         ...
+         }",3adaf096758a6015ca4f733e2e49ee5528ac3cd5,Refactoring,Property placeholder (placeholder for property such as system property or environment variable) was moved to setting. The change was made so that the property placeholder can only be accessible through setting.,Listing below shows changes which are part of moving property placeholder to setting package. The listing shows a method for replacing a property placeholder. The iterator variable \texttt{\justify{entryItr}} holds all the settings for the xContent builder. Then for each element in the settings is replaced with specific setting set for the builder. ,"        public Builder replacePropertyPlaceholders() {
+            PropertyPlaceholder propertyPlaceholder = new PropertyPlaceholder(""${"", ""}"", false);
+            PropertyPlaceholder.PlaceholderResolver placeholderResolver = new PropertyPlaceholder.PlaceholderResolver() {
+                    @Override
+                    public String resolvePlaceholder(String placeholderName) {
+                        if (placeholderName.startsWith(""env."")) {
+                            // explicit env var prefix
+                            return System.getenv(placeholderName.substring(""env."".length()));
+                        }
+            ...
+                         return true;
+                     }
+                 };
+-            for (Map.Entry<String, String> entry : new HashMap<>(map).entrySet()) {
+-                String value = propertyPlaceholder.replacePlaceholders(entry.getKey(), entry.getValue(), placeholderResolver);
++            Iterator<Map.Entry<String, String>> entryItr = map.entrySet().iterator();
++            while (entryItr.hasNext()) {
++                Map.Entry<String, String> entry = entryItr.next();
++                if (entry.getValue() == null) {
++                    // a null value obviously can't be replaced
++                    continue;
++                }
++                String value = propertyPlaceholder.replacePlaceholders(entry.getValue(), placeholderResolver);
+                 // if the values exist and has length, we should maintain it in the map
+                 // otherwise, the replace process resolved into removing it
+                 if (Strings.hasLength(value)) {
+-                    map.put(entry.getKey(), value);
++                    entry.setValue(value);
+                 } else {
+-                    map.remove(entry.getKey());
++                    entryItr.remove();
+                 }
+             }
+             return this;
+        }"
+174,15d3d74444ede63651f5ef10dd172da5293529ad,dcd2642dad0ac54a6a58abe47b809ca9c665a6dd,d3d57da89ff3ae4071f93af97c1f71e7b8d3364a,Sun May 15 02:23:59 CEST 2016,core/src/test/java/org/elasticsearch/index/engine/ShadowEngineTests.java,"return new ParsedDocument(uidField, versionField, seqNoField, id, type, routing, timestamp, ttl, Arrays.asList(document), source, mappingsUpdate);","return new ParsedDocument(uidField, versionField, id, type, routing, timestamp, ttl, Arrays.asList(document), source, mappingsUpdate);
+    ","document.add(new LongPoint(""point_field"", 42)); // so that points report memory/disk usage         return new ParsedDocument(versionField, id, type, routing, timestamp, ttl, Arrays.asList(document), source, mappingsUpdate);",,Change of Method call or object creation,5d8f684319cb0a5d025d6fc7d6990fcd0edd07d6,Refactoring,"Document mapping (defining how document and its fields are indexed and stored) was refactored to remove duplicate or dead implementation of mapping meta-fields.  The meta-fields of the document include \_index (index which document belongs), \_id (document ID), \_uid (comprise document ID and mapping type), and \_type (document’s mapping type specified by user, for example product catalog might be stored in catalog type, which divide document into logical groups). Also, in this change, the \_index field was made not configurable by the user.",Listing below shows a change which is part of refactoring implementation of document’s meta-fields in document mapping. A parameter \texttt{\justify{uidField}} which is a document field that holds document ID and document’s mapping type was removed in a method which parse document for indexing.,"    private ParsedDocument testParsedDocument(String uid, String id, String type, String routing, long timestamp, long ttl, ParseContext.Document document, BytesReference source, Mapping mappingsUpdate) {
+        Field uidField = new Field(""_uid"", uid, UidFieldMapper.Defaults.FIELD_TYPE);
+        Field versionField = new NumericDocValuesField(""_version"", 0);
+        document.add(uidField);
+        document.add(versionField);
+-       return new ParsedDocument(uidField, versionField, id, type, routing, timestamp, ttl, Arrays.asList(document), source, mappingsUpdate);
+         ...
++       return new ParsedDocument(versionField, id, type, routing, timestamp, ttl, Arrays.asList(document), source, mappingsUpdate);
+    }",5fb0f9a88ff40b3bc0f9fe81f181dd90ea76c6ea,Feature introduction,Same as \ref{conflict2_branch}.,"In the listing below, a parameter \texttt{\justify{seqNoField}} for document field which holds a counter to enforce semantic of primary terms. The counter (a sequence number) is passed when parsing a document during indexing.","     private ParsedDocument testParsedDocument(String uid, String id, String type, String routing, long timestamp, long ttl, ParseContext.Document document, BytesReference source, Mapping mappingsUpdate) {
+         Field uidField = new Field(""_uid"", uid, UidFieldMapper.Defaults.FIELD_TYPE);
+         Field versionField = new NumericDocValuesField(""_version"", 0);
++        Field seqNoField = new NumericDocValuesField(""_seq_no"", 0);
+         document.add(uidField);
+         document.add(versionField);
+-        return new ParsedDocument(uidField, versionField, id, type, routing, timestamp, ttl, Arrays.asList(document), source, mappingsUpdate);
++        return new ParsedDocument(uidField, versionField, seqNoField, id, type, routing, timestamp, ttl, Arrays.asList(document), source, mappingsUpdate);
+     }"
+194,27d4994affd5ceaf16785465fd7b89ebec1cb95a,2c6e78e16ceb71861dc23f173ecb702b0d36a096,5e8656aff04800faa5e71c3956f097cdab0e119b,Thu Mar 24 18:10:11 CET 2016,core/src/main/java/org/elasticsearch/action/admin/cluster/stats/ClusterStatsNodes.java,public OsStats readFrom(StreamInput in) throws IOException {             return new OsStats(in);,"public void readFrom(StreamInput in) throws IOException {
+    availableProcessors = in.readVInt();
+    allocatedProcessors = in.readVInt();
+    availableMemory = in.readLong();
+    int size = in.readVInt();
+    names.clear();
+    for (int i = 0; i < size; i++) {
+        names.addTo(in.readString(), in.readVInt());
+    }","public void readFrom(StreamInput in) throws IOException {             availableProcessors = in.readVInt();             allocatedProcessors = in.readVInt();             int size = in.readVInt();             names.clear();             for (int i = 0; i < size; i++) {                 names.addTo(in.readString(), in.readVInt());             }",,Change of Method call or object creation,ce86fc56470bcb2f34165f5e7149736ae1e212bb,Breaking change fix,"Metric for available memory for all nodes in the cluster was removed in the cluster statistics. The metric was removed since it remained when statistics for specific operating system (OS) were removed and it has no use as it provides total available memory used in all nodes through the cluster. Therefore, statistics of available memory in all nodes in the cluster can be obtained from the individual node statistics.",The listing below shows a change which was made to remove metric for available memory in all nodes in the cluster. The metric \texttt{\justify{availableMemory}} was removed in the method \texttt{\justify{readFrom}} which read stream \texttt{\justify{in}} transferred to xContent.,"     public static class OsStats implements ToXContent, Streamable { 
+         ...
+         public void readFrom(StreamInput in) throws IOException {
+            availableProcessors = in.readVInt();
+            allocatedProcessors = in.readVInt();
+-           availableMemory = in.readLong();
+            int size = in.readVInt();
+            names.clear();
+            for (int i = 0; i < size; i++) {
+                names.addTo(in.readString(), in.readVInt());
+            }
+        }
+    }",2c6e78e16ceb71861dc23f173ecb702b0d36a096,Feature enhancement,"Node setting which was used to instantiate a node based client was removed. The setting allows to set the node which is used as a client and route the client operations to other nodes that the operations need to execute on. The setting was removed as there are settings for making a node as a master node which among other responsibilities it tracks other nodes in the same cluster and assign shards to nodes, ingest node which processes documents before they are indexed, and data node which holds the indexed documents indexed in the shards. Therefore, the settings for the master and data nodes can replace the setting for the client.","The listing below shows changes that were part of removing the setting which make the node based client. The class for cluster nodes statistics was changed to implement a \texttt{\justify{Writeable}} instead of \texttt{\justify{Streamable}}. Therefore, with this change, the method \texttt{\justify{readFrom}} which reads from the stream was changed to return an instance of operating system statistics.","     public static class OsStats implements ToXContent, Streamable {
+         ...
+-        public void readFrom(StreamInput in) throws IOException {
+-            availableProcessors = in.readVInt();
+-            allocatedProcessors = in.readVInt();
+-            availableMemory = in.readLong();
+-            int size = in.readVInt();
+-            names.clear();
+-            for (int i = 0; i < size; i++) {
+-                names.addTo(in.readString(), in.readVInt());
+-            }
++        public OsStats readFrom(StreamInput in) throws IOException {
++            return new OsStats(in);
+         }
+     }"
+205,bf390a935e8dfcb09a12dcf387c838fb7029ae1c,da1992248960e75f27cfc1af5386e905e3ea8fcc,4ac4f3c8bc25eb3ca6b20fbba1ec33a54e93dd99,Mon Mar 21 17:18:23 CET 2016,core/src/main/java/org/elasticsearch/cluster/node/DiscoveryNodeService.java,"public Map<String, String> buildAttributes() {         Map<String, String> attributes = new HashMap<>(Node.NODE_ATTRIBUTES.get(this.settings).getAsMap());         attributes.remove(""name""); // name is extracted in other places         if (attributes.containsKey(""client"")) {             throw new IllegalArgumentException(""node.client setting is no longer supported, use "" + Node.NODE_MASTER_SETTING.getKey()                 + "", "" + Node.NODE_DATA_SETTING.getKey() + "" and "" + Node.NODE_INGEST_SETTING.getKey() + "" explicitly instead"");         }         //nocommit why don't we remove master as well if it's true? and ingest?         if (attributes.containsKey(DiscoveryNode.Role.DATA.getRoleName())) {             if (attributes.get(DiscoveryNode.Role.DATA.getRoleName()).equals(""true"")) {                 attributes.remove(DiscoveryNode.Role.DATA.getRoleName());             }         }         for (CustomAttributesProvider provider : customAttributesProviders) {             try {                 Map<String, String> customAttributes = provider.buildAttributes();                 if (customAttributes != null) {                     for (Map.Entry<String, String> entry : customAttributes.entrySet()) {                         if (!attributes.containsKey(entry.getKey())) {                             attributes.put(entry.getKey(), entry.getValue());                         }                     }                 }             } catch (Exception e) {                 logger.warn(""failed to build custom attributes from provider [{}]"", e, provider);             }         }         return attributes;     }","    public Map<String, String> buildAttributes() {
+        Map<String, String> attributes = new HashMap<>(settings.getByPrefix(""node."").getAsMap());
+        attributes.remove(""name""); // name is extracted in other places
+        if (attributes.containsKey(""client"")) {
+            if (attributes.get(""client"").equals(""false"")) {
+                attributes.remove(""client""); // this is the default
+            } else {
+                // if we are client node, don't store data ...
+                attributes.put(""data"", ""false"");
+            }
+        }
+        if (attributes.containsKey(""data"")) {
+            if (attributes.get(""data"").equals(""true"")) {
+                attributes.remove(""data"");
+            }
+        }
+
+        for (CustomAttributesProvider provider : customAttributesProviders) {
+            try {
+                Map<String, String> customAttributes = provider.buildAttributes();
+                if (customAttributes != null) {
+                    for (Map.Entry<String, String> entry : customAttributes.entrySet()) {
+                        if (!attributes.containsKey(entry.getKey())) {
+                            attributes.put(entry.getKey(), entry.getValue());
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn(""failed to build custom attributes from provider [{}]"", e, provider);
+            }
+        }
+
+        return attributes;
+    }","    public DiscoveryNode buildLocalNode(TransportAddress publishAddress) {
+        Map<String, String> attributes = new HashMap<>(settings.getByPrefix(""node."").getAsMap());
+        attributes.remove(""name""); // name is extracted in other places
+        if (attributes.containsKey(""client"")) {
+            if (attributes.get(""client"").equals(""false"")) {
+                attributes.remove(""client""); // this is the default
+            } else {
+                // if we are client node, don't store data ...
+                attributes.put(""data"", ""false"");
+            }
+        }
+        if (attributes.containsKey(""data"")) {
+            if (attributes.get(""data"").equals(""true"")) {
+                attributes.remove(""data"");
+            }
+        }
+
+        for (CustomAttributesProvider provider : customAttributesProviders) {
+            try {
+                Map<String, String> customAttributes = provider.buildAttributes();
+                if (customAttributes != null) {
+                    for (Map.Entry<String, String> entry : customAttributes.entrySet()) {
+                        if (!attributes.containsKey(entry.getKey())) {
+                            attributes.put(entry.getKey(), entry.getValue());
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn(""failed to build custom attributes from provider [{}]"", e, provider);
+            }
+        }
+
+        final String nodeId = generateNodeId(settings);
+        return new DiscoveryNode(settings.get(""node.name""), nodeId, publishAddress, attributes, version);
+    }",,Change of Method call or object creation,cd12241e9f76c01c98961afb4f5b874926cc4269,Refactoring,A new module for node connection management was introduced to separate cluster module which manages cluster state and transport module which is used for the nodes communication within the cluster. The node connection management module connects and disconnects nodes connection to the cluster when they are added and removed from the cluster respectively. The change was made to remove the dependency between the cluster and transport modules.,Listing below shows changes that led to the merge conflict which are part of separating the dependency between cluster and transport modules. The method \texttt{\justify{buildAttributes}} that builds attributes for node discovering and master node selection in the cluster was changed to \texttt{\justify{buildLocalNode}} which returns an instance of the node in the cluster when the node transport address is passed. ,"-    public Map<String, String> buildAttributes() {
++    public DiscoveryNode buildLocalNode(TransportAddress publishAddress) {
+         Map<String, String> attributes = new HashMap<>(settings.getByPrefix(""node."").getAsMap());
+         attributes.remove(""name""); // name is extracted in other places
+         if (attributes.containsKey(""client"")) {
+            ...
+         }
+         if (attributes.containsKey(""data"")) {
+            ...
+         }
+ 
+         for (CustomAttributesProvider provider : customAttributesProviders) {
+            ...
+         }
+
+-        return attributes;
++        final String nodeId = generateNodeId(settings);
++        return new DiscoveryNode(settings.get(""node.name""), nodeId, publishAddress, attributes, version);
+     }","eb941d8005c45af402950cc37df3527abbe71d6b, 4224371d8b0576286a95a0558050d579bdae909e",Feature enhancement,"Same as \ref{conflict13_branch} which removed the setting used to set the node as a client. The client node was used to route operations to other nodes required to execute the operations. However, the data and master nodes can execute the operations that they are responsible with. Therefore, the role of the client node was unnecessary.  Another change that was also part of removing the client node setting is introduction of concept of node roles when discovering nodes in the cluster. ","Listing below shows changes which removed client node setting and introduced the concept of roles into node discovery in the cluster. An exception \texttt{\justify{IllegalArgumentException}} is thrown if the setting \texttt{\justify{node.client}} for setting the node as the client node is passed when the nodes are configured. Furthermore, the node role \texttt{\justify{DATA}} was added when building attributes for discovering the nodes in the cluster.","     public Map<String, String> buildAttributes() {
+-        Map<String, String> attributes = new HashMap<>(settings.getByPrefix(""node."").getAsMap());
++        Map<String, String> attributes = new HashMap<>(Node.NODE_ATTRIBUTES.get(this.settings).getAsMap());
+         attributes.remove(""name""); // name is extracted in other places
+         if (attributes.containsKey(""client"")) {
+-            if (attributes.get(""client"").equals(""false"")) {
+-                attributes.remove(""client""); // this is the default
+-            } else {
+-                // if we are client node, don't store data ...
+-                attributes.put(""data"", ""false"");
+-            }
++            throw new IllegalArgumentException(""node.client setting is no longer supported, use "" + Node.NODE_MASTER_SETTING.getKey()
++                + "", "" + Node.NODE_DATA_SETTING.getKey() + "" and "" + Node.NODE_INGEST_SETTING.getKey() + "" explicitly instead"");
+         }
+-        if (attributes.containsKey(""data"")) {
+-            if (attributes.get(""data"").equals(""true"")) {
+-                attributes.remove(""data"");
++        //nocommit why don't we remove master as well if it's true? and ingest?
++        if (attributes.containsKey(DiscoveryNode.Role.DATA.getRoleName())) {
++            if (attributes.get(DiscoveryNode.Role.DATA.getRoleName()).equals(""true"")) {
++                attributes.remove(DiscoveryNode.Role.DATA.getRoleName());
+             }
+         }
+         for (CustomAttributesProvider provider : customAttributesProviders) {
+            ...
+         }
+
+         return attributes;
+     }"
+210,bd96075f7f7140ef61c619bc4399bf43af7e83fb,ce6ec511b9761997d215fd821ecfba55a803c597,e4bed0c97e7e0acb293624f9601027f8be38c874,Mon Mar 14 21:18:42 CET 2016,core/src/main/java/org/elasticsearch/action/admin/cluster/node/stats/NodeStats.java,ingestStats = in.readOptionalWritable(IngestStats::new);,"ingestStats = in.readOptionalWritable(IngestStats.PROTO);
+    ",ingestStats = in.readOptionalWritable(IngestStats.PROTO::readFrom);,,Change of Method call or object creation,31740e279f812f27d7f064e14a361a1213b3cb0f,Feature enhancement,"Resolution of the index name to index instances was modified so that to be performed early when there is possibility of cluster state changes. Before the change, the resolution was performed when there is a need for it. This was deemed as a problem specifically when there is a request to the index is carried out and at the same time there are index changes due mapping update sent by a node to the master node. When sending the mapping update to the master node, the index name is used to identify the index in the cluster. Therefore, with this change, to solve the problem, the mapping update uses a concrete index which is a tuple that containing index name and UUID (see also \ref{conflict16_mainline}). Therefore, the mapping update will be performed if the index matches the tuple. ","The listing below shows a change which was part of resolving index name to index instance early. The method \texttt{\justify{readFrom}} from \texttt{\justify{IngestStats}} class, which build statistics for document preprocessing before indexing, was referenced when reading a stream for ingest statistics in the node statistics. ","     public void readFrom(StreamInput in) throws IOException {
+         ...
+         breaker = AllCircuitBreakerStats.readOptionalAllCircuitBreakerStats(in);
+         scriptStats = in.readOptionalStreamable(ScriptStats::new);
+         discoveryStats = in.readOptionalStreamable(() -> new DiscoveryStats(null));
+-        ingestStats = in.readOptionalWritable(IngestStats.PROTO);
++        ingestStats = in.readOptionalWritable(IngestStats.PROTO::readFrom);
+     }",121e7c8ca4f7bb1cd3fd887d63d900503307647a,Test improvement,An infrastructure was added to run REST tests on a cluster with multiple nodes that use two different Elasticsearch minor versions. The infrastructure can be used for backward compatibility tests.,The listing below shows a change which was part of adding the infrastructure for running REST tests on the cluster with nodes that have two different minor versions. The value passed when reading a stream for the ingest statistics in the node statistics was changes from static member \texttt{\justify{PROTO}} which is an ingest prototype to constructor reference of the class \texttt{\justify{IngestStats}} which is used for the document preprocessing statistics.,"     public void readFrom(StreamInput in) throws IOException {
+         ...
+         breaker = AllCircuitBreakerStats.readOptionalAllCircuitBreakerStats(in);
+         scriptStats = in.readOptionalStreamable(ScriptStats::new);
+         discoveryStats = in.readOptionalStreamable(() -> new DiscoveryStats(null));
+-        ingestStats = in.readOptionalWritable(IngestStats.PROTO);
++        ingestStats = in.readOptionalWritable(IngestStats::new);
+     }"
+215,69c83b3459f100055c316f364cea3cd58d713b52,e7cffa5e9fd3c2eb177eb57e86a55c13006c47ad,b4db26eaf9a07948e4da8d1197aadfb414699562,Thu Mar 10 11:44:36 CET 2016,core/src/main/java/org/elasticsearch/search/suggest/SuggestParseElement.java,"SuggestionSearchContext suggestionSearchContext = parseInternal(parser, context.getQueryShardContext());","SuggestionSearchContext suggestionSearchContext = parseInternal(parser, context.mapperService(), context.fieldData(), context.shardTarget().index(), context.shardTarget().shardId());","SuggestionSearchContext suggestionSearchContext = parseInternal(parser, context.mapperService(), context.fieldData(),             context.shardTarget().shardId());",,Change of Method call or object creation,e72dac91b3c63e92c53d2beb8d9d4d5c234d3235,Feature enhancement,"An index lookup in indices module, which provide services such as the index and mapping management, used in search and other requests was modified to use index UUID (Universally Unique Identifier) instead of index name. The change was made to look up for the index UUID in the index instance, which is a tuple containing UUID and name. This change prevents a situation of modifying a wrong index in case there are two indices with same name but different UUID. ","In the listing below, a parameter \texttt{\justify{context.shardTarget().index()}} which pass index name when parsing search request content for search suggestions was removed. The index name was passed so that the search suggester can access the index it operates on. Therefore, this change aims to prevent modification of wrong index by not passing the index name when the search content is parsed for suggestions.","     public void parse(XContentParser parser, SearchContext context) throws Exception {
+         SuggestionSearchContext suggestionSearchContext = parseInternal(parser, context.mapperService(), context.fieldData(),
+-                context.shardTarget().index(), context.shardTarget().shardId());
++            context.shardTarget().shardId());
+         context.suggest(suggestionSearchContext);
+     }",9e0f6e3f9c3ba7a539dcb9366529db5ab3295d61,Refactoring,"Suggestion context builder, which build context for suggestion when searching documents in an index, was added to phrase suggestion builder, which build correct phrases using word tokens for search suggestion. Also, search suggestion context builder was added to the top-level suggestion builder. The changes were made to add context builders for search suggestion in the top level. This change was part of refactoring suggest feature which suggests terms that are looking similar by using a suggester based on a text that is provided.","In the listing below, the parameters \texttt{\justify{context.shardTarget().index()}} and \texttt{\justify{context.shardTarget().shardId()}}, which pass index name and shard ID respectively when parsing search content for search suggestion, were removed and replaced with the parameter \texttt{\justify{context.getQueryShardContext()}} that get shard context from a context object which is used to create queries on shard level.","     public void parse(XContentParser parser, SearchContext context) throws Exception {
+-        SuggestionSearchContext suggestionSearchContext = parseInternal(parser, context.mapperService(), context.fieldData(),
+-                context.shardTarget().index(), context.shardTarget().shardId());
++        SuggestionSearchContext suggestionSearchContext = parseInternal(parser, context.getQueryShardContext());
+         context.suggest(suggestionSearchContext);
+     }"
+229,c11cf3bf1fec128946f2517b944e3feed27f1f0a,e4031932edaea00b5ec06f6153aa7e02e8f0e74e,29e3443917b56a5015ca1869af612a48ab306e83,Fri Mar 04 12:23:10 CET 2016,core/src/main/java/org/elasticsearch/common/settings/Setting.java,"builder.field(""properties"", properties);",,"builder.field(""key"", key.toString());         builder.field(""type"", scope.name());         builder.field(""dynamic"", dynamic);",Changes added on the same space. New changes on the same space,Addition of statements in the Same area,52acf0e6e17916bdece0a677dfba8e1a5fd064fd,Feature enhancement,"The logic for parsing Azure storage settings was simplified. The change was made to take advantage of the new implemented settings infrastructure which made Elasticsearch module settings to be resettable and transactionally updateable. Therefore, if there is an error, the settings will not be updated.","In the listing below, a setting field \texttt{\justify{key}}, which before the change it was an instance variable of type \texttt{\justify{String}}, was converted to string since it is the instance variable of type \texttt{\justify{Key}} which sets a key for a setting. ","     public final XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+         builder.startObject();
+-        builder.field(""key"", key);
++        builder.field(""key"", key.toString());
+         builder.field(""type"", scope.name());
+         builder.field(""dynamic"", dynamic);
+         builder.field(""is_group_setting"", isGroupSetting());
+         ...
+     }",31b5e0888f4414b6ba863778436e177b6e82eea5,Feature enhancement,"Support for filtering settings that might contain information which are sensitive such as cloud platform keys was defined to allow to filter automatically the information when creating a setting module. Similar to mainline change, this change was made after the new infrastructure of setting module was implemented.  ","The listing below shows changes which were made to support filtering of settings automatically. The setting \texttt{\justify{type}} and \texttt{\justify{dynamic}} fields, which specifies type of the setting based on the scope and if the setting can be updated while a cluster is running respectively, were removed and replaced with setting \texttt{\justify{properties}} which specifies dynamism and scope of the setting. The list of the properties that can be set are filtered, dynamic, cluster scope, node scope, and index scope which specifies whether the setting can be filtered or not, if the setting can be updated while the cluster is running, if the setting is applicable to cluster level, if the setting is applicable to node level, and if the setting is applicable when indexing.","     public final XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+         builder.startObject();
+         builder.field(""key"", key);
+-        builder.field(""type"", scope.name());
+-        builder.field(""dynamic"", dynamic);
++        builder.field(""properties"", properties);
+         builder.field(""is_group_setting"", isGroupSetting());
+         builder.field(""default"", defaultValue.apply(Settings.EMPTY));
+         builder.endObject();
+         ...
+     }"
+241,4bb5b4100d0687f29d758ce5a329c831c563ebe5,4d0feff2efc358914f2d29634eafdb4dec1e5c0f,b5aee2075f1b5a9fd6a3a0f3b7594e5d51c57b33,Fri Feb 12 15:53:31 CET 2016,core/src/main/java/org/elasticsearch/action/admin/cluster/stats/TransportClusterStatsAction.java,"shardsStats.add(new ShardStats(indexShard.routingEntry(), indexShard.shardPath(), new CommonStats(indexShard, SHARD_STATS_FLAGS), indexShard.commitStats(), indexShard.seqNoStats()));","shardsStats.add(new ShardStats(indexShard.routingEntry(), indexShard.shardPath(), new CommonStats(indexShard, SHARD_STATS_FLAGS), indexShard.commitStats()));
+                ","shardsStats.add(new ShardStats(indexShard.routingEntry(), indexShard.shardPath(), new CommonStats(indicesService.getIndicesQueryCache(), indexShard, SHARD_STATS_FLAGS), indexShard.commitStats()));",,Change of Method call or object creation,7835525f454bc08038ffe50bda4866e076bb89d6,Framework removal,Request and query caches for indices were moved to indices service provider which provides service for the operations on the indices such as removing an index and providing node statistics. The change was made to remove Guice from the caches. ,The listing is part of moving request and query caches to indices service after removing dependency to Guice framework. The parameter \texttt{\justify{indicesService.getIndicesQueryCache()}} was added to get query cache for the common shards statistics in the node.,"     protected ClusterStatsNodeResponse nodeOperation(ClusterStatsNodeRequest nodeRequest) {
+         ...
+         List<ShardStats> shardsStats = new ArrayList<>();
+         for (IndexService indexService : indicesService) {
+             for (IndexShard indexShard : indexService) {
+                 if (indexShard.routingEntry() != null && indexShard.routingEntry().active()) {
+                     // only report on fully started shards
+-                    shardsStats.add(new ShardStats(indexShard.routingEntry(), indexShard.shardPath(), new CommonStats(indexShard, SHARD_STATS_FLAGS), indexShard.commitStats()));
++                    shardsStats.add(new ShardStats(indexShard.routingEntry(), indexShard.shardPath(), new CommonStats(indicesService.getIndicesQueryCache(), indexShard, SHARD_STATS_FLAGS), indexShard.commitStats()));
+                 }
+             }
+         }
+         ...
+     }",3106948ae1d85a1c3cb62cb9ba9dd8d42e693261,Feature introduction,Same as \ref{conflict3_branch} which introduced local checkpoints.,The listing below shows changes that led to the merge conflict when the local checkpoints were introduced. The parameter \texttt{\justify{indexShard.seqNoStats()}} was added to get statistics of the sequence numbers when indexing the shard. The sequence numbers for individual shard are used as checkpoints which provide history across all shards in the node. ,"     protected ClusterStatsNodeResponse nodeOperation(ClusterStatsNodeRequest nodeRequest) {
+         ...
+         List<ShardStats> shardsStats = new ArrayList<>();
+         for (IndexService indexService : indicesService) {
+             for (IndexShard indexShard : indexService) {
+                 if (indexShard.routingEntry() != null && indexShard.routingEntry().active()) {
+                     // only report on fully started shards
+-                    shardsStats.add(new ShardStats(indexShard.routingEntry(), indexShard.shardPath(), new CommonStats(indexShard, SHARD_STATS_FLAGS), indexShard.commitStats()));
++                    shardsStats.add(new ShardStats(indexShard.routingEntry(), indexShard.shardPath(),
++                            new CommonStats(indexShard, SHARD_STATS_FLAGS), indexShard.commitStats(), indexShard.seqNoStats()));
+                 }
+             }
+         }
+         ...
+     }"
+260,4bb5b4100d0687f29d758ce5a329c831c563ebe5,4d0feff2efc358914f2d29634eafdb4dec1e5c0f,b5aee2075f1b5a9fd6a3a0f3b7594e5d51c57b33,Fri Feb 12 15:53:31 CET 2016,core/src/test/java/org/elasticsearch/action/support/broadcast/node/TransportBroadcastByNodeActionTests.java,"final ShardId shardId = new ShardId(index, ++shardIndex);                 final int primaryTerm = randomInt(200);                 ShardRouting shard = TestShardRouting.newShardRouting(index, shardId.getId(), node.id(), primaryTerm, true, ShardRoutingState.STARTED, 1);","final ShardId shardId = new ShardId(index, ++shardIndex);
+ShardRouting shard = TestShardRouting.newShardRouting(index, shardId.getId(), node.id(), true, ShardRoutingState.STARTED, 1);","final ShardId shardId = new ShardId(index, ""_na_"", ++shardIndex);                 ShardRouting shard = TestShardRouting.newShardRouting(index, shardId.getId(), node.id(), true, ShardRoutingState.STARTED);",Two changes,Change of Method call or object creation,"2a137b554825a5f848cfaff6311d7c298fd76fe7, 4937531a17af245f36c58ff5a4e2229cdd3b4001",Feature enhancement,"There are two changes from the common ancestor version that led to this conflict. In the first change, the UUID were made available in index properties, shard level components, and shard routing information.  This change relates to \ref{conflict16_mainline}, whereUUID were used for the index lookup in indices services instead of index name. This change was a first step to use UUIDs instead of name when comparing index, for example when looking up the index for modification. 
+In the second change, version information that is stored in the shard state was removed in shard routing information. Instead of the version information, the allocation IDs (IDs generated when shard is allocated to a cluster) are used to allocate a primary shard, for example when a cluster is restarted. The change was made since there is no use case for the version information.  ","Listing below shows two changes that led to the merge conflict. In the first change, a parameter, that is \texttt{\justify{""\_na\_""}}, was passed to shard level components (\texttt{\justify{ShardId}}) when setting a cluster state for testing.  
+On the other hand, in the second change, a parameter that pass version information when creating a new shard routing information was removed. In the code, version \texttt{\justify{1}} passed in the method \texttt{\justify{newShardRouting}} was removed.","    void setClusterState(TestClusterService clusterService, String index) {
+        ...
+            for (int j = 0; j < numberOfShards; j++) {                
+-                final ShardId shardId = new ShardId(index, ++shardIndex);
+-                ShardRouting shard = TestShardRouting.newShardRouting(index, shardId.getId(), node.id(), true, ShardRoutingState.STARTED, 1);
++                final ShardId shardId = new ShardId(index, ""_na_"", ++shardIndex);
++                ShardRouting shard = TestShardRouting.newShardRouting(index, shardId.getId(), node.id(), true, ShardRoutingState.STARTED);
+                 IndexShardRoutingTable.Builder indexShard = new IndexShardRoutingTable.Builder(shardId);
+                 indexShard.addShard(shard);
+                 indexRoutingTable.addIndexShard(indexShard.build());
+             }
+        ...
+    }",b364cf54bfd95326c33f3592417253bec8e1aee8,Feature introduction,Primary terms were introduced to track how many times a primary shard is selected among replica shards after a previous primary shard failed. The primary terms were introduced to identify operations that come from the failed primary shard. This change relates to \ref{conflict2_branch} and it is a first step of sequence numbers introduction.,"Listing below shows changes made which introduce primary terms in a method which set cluster state for testing. A new parameter was added to a method \texttt{\justify{newShardRouting}} which create new shard routing information. In the test, a primary term \texttt{\justify{primaryTerm}} is passed to the shard routing information.","     void setClusterState(TestClusterService clusterService, String index) {
+         int numberOfNodes = randomIntBetween(3, 5);
+         DiscoveryNodes.Builder discoBuilder = DiscoveryNodes.builder();
+         IndexRoutingTable.Builder indexRoutingTable = IndexRoutingTable.builder(index);
+         ...
+             for (int j = 0; j < numberOfShards; j++) {
+                 final ShardId shardId = new ShardId(index, ++shardIndex);
+-                ShardRouting shard = TestShardRouting.newShardRouting(index, shardId.getId(), node.id(), true, ShardRoutingState.STARTED, 1);
++                final int primaryTerm = randomInt(200);
++                ShardRouting shard = TestShardRouting.newShardRouting(index, shardId.getId(), node.id(), primaryTerm, true, ShardRoutingState.STARTED, 1);
+                 IndexShardRoutingTable.Builder indexShard = new IndexShardRoutingTable.Builder(shardId);
+                 indexShard.addShard(shard);
+                 indexRoutingTable.addIndexShard(indexShard.build());
+       ...
+    }"
+274,4bb5b4100d0687f29d758ce5a329c831c563ebe5,4d0feff2efc358914f2d29634eafdb4dec1e5c0f,b5aee2075f1b5a9fd6a3a0f3b7594e5d51c57b33,Fri Feb 12 15:53:31 CET 2016,core/src/test/java/org/elasticsearch/cluster/routing/allocation/decider/DiskThresholdDeciderTests.java,"ShardRouting firstRouting = TestShardRouting.newShardRouting(""test"", 0, ""node1"", null, null, 1, true, ShardRoutingState.STARTED, 1);         ShardRouting secondRouting = TestShardRouting.newShardRouting(""test"", 1, ""node1"", null, null, 1, true, ShardRoutingState.STARTED, 1);","ShardRouting firstRouting = TestShardRouting.newShardRouting(""test"", 0, ""node1"", null, null, true, ShardRoutingState.STARTED, 1);
+ShardRouting secondRouting = TestShardRouting.newShardRouting(""test"", 1, ""node1"", null, null, true, ShardRoutingState.STARTED, 1);","ShardRouting firstRouting = TestShardRouting.newShardRouting(""test"", 0, ""node1"", null, null, true, ShardRoutingState.STARTED);         ShardRouting secondRouting = TestShardRouting.newShardRouting(""test"", 1, ""node1"", null, null, true, ShardRoutingState.STARTED);",,Change of Method call or object creation,4937531a17af245f36c58ff5a4e2229cdd3b4001,Feature enhancement,Same as the second change in \ref{conflict19_mainline}.,"Listing below shows changes to remove version information in shard routing information. Same as in \ref{conflict19_mainline}, the parameter that pass the version information to the method which create new shard routing information was removed. In the code, a test version texttt{\justify{1}} was removed from a test shard routing information  texttt{\justify{TestShardRouting}}.","    public void testCanRemainWithShardRelocatingAway() {
+        ...
+-        ShardRouting firstRouting = TestShardRouting.newShardRouting(""test"", 0, ""node1"", null, null, true, ShardRoutingState.STARTED, 1);
+-        ShardRouting secondRouting = TestShardRouting.newShardRouting(""test"", 1, ""node1"", null, null, true, ShardRoutingState.STARTED, 1);
++        ShardRouting firstRouting = TestShardRouting.newShardRouting(""test"", 0, ""node1"", null, null, true, ShardRoutingState.STARTED);
++        ShardRouting secondRouting = TestShardRouting.newShardRouting(""test"", 1, ""node1"", null, null, true, ShardRoutingState.STARTED);
+         RoutingNode firstRoutingNode = new RoutingNode(""node1"", discoveryNode1, Arrays.asList(firstRouting, secondRouting));
+         RoutingTable.Builder builder = RoutingTable.builder().add(
+           ...
+         );
+         ClusterState clusterState = ClusterState.builder(baseClusterState).routingTable(builder.build()).build();
+  ...
+    }",b364cf54bfd95326c33f3592417253bec8e1aee8,Feature introduction,Same as \ref{conflict19_branch}.,"Same as topic branch change in conflict 19, a new parameter was added to method newShardRouting to pass primary terms when a new shard routing information is created. In the listing, null primary term was passed when testing shard routing information were created. ","    public void testCanRemainWithShardRelocatingAway() {
+        ...
+-        ShardRouting firstRouting = TestShardRouting.newShardRouting(""test"", 0, ""node1"", null, null, true, ShardRoutingState.STARTED, 1);
+-        ShardRouting secondRouting = TestShardRouting.newShardRouting(""test"", 1, ""node1"", null, null, true, ShardRoutingState.STARTED, 1);
++        ShardRouting firstRouting = TestShardRouting.newShardRouting(""test"", 0, ""node1"", null, null, 1, true, ShardRoutingState.STARTED, 1);
++        ShardRouting secondRouting = TestShardRouting.newShardRouting(""test"", 1, ""node1"", null, null, 1, true, ShardRoutingState.STARTED, 1);
+         RoutingNode firstRoutingNode = new RoutingNode(""node1"", discoveryNode1, Arrays.asList(firstRouting, secondRouting));
+         RoutingTable.Builder builder = RoutingTable.builder().add(
+                 IndexRoutingTable.builder(""test"")
+                         .addIndexShard(new IndexShardRoutingTable.Builder(new ShardId(""test"", 0))
+                                        .addShard(firstRouting)
+                                        .build()
+                        )
+                        .addIndexShard(new IndexShardRoutingTable.Builder(new ShardId(""test"", 1))
+                                        .addShard(secondRouting)
+                                        .build()
+                        )
+         );
+       ...
+    }"
+281,4bb5b4100d0687f29d758ce5a329c831c563ebe5,4d0feff2efc358914f2d29634eafdb4dec1e5c0f,b5aee2075f1b5a9fd6a3a0f3b7594e5d51c57b33,Fri Feb 12 15:53:31 CET 2016,core/src/test/java/org/elasticsearch/cluster/routing/allocation/decider/DiskThresholdDeciderUnitTests.java,"ShardRouting test_3 = ShardRouting.newUnassigned(""test"", 3, null, 1, true, new UnassignedInfo(UnassignedInfo.Reason.INDEX_CREATED, ""foo""));","ShardRouting test_3 = ShardRouting.newUnassigned(""test"", 3, null, false, new UnassignedInfo(UnassignedInfo.Reason.INDEX_CREATED, ""foo""));","ShardRouting test_3 = ShardRouting.newUnassigned(indexMetaData.getIndex(), 3, null, true, new UnassignedInfo(UnassignedInfo.Reason.INDEX_CREATED, ""foo""));",,Change of Method call or object creation,2a137b554825a5f848cfaff6311d7c298fd76fe7,Feature enhancement,"Same as the first change in \ref{conflict19_mainline} which added UUID stored in index setting available to shard level components, index properties, and shard routing information.","Listing below shows a change which was part of making index UUID available to shard routing information, shard components, and index properties. The value for shard ID passed on method \texttt{\justify{newUnwasassigned}}, which create new unassigned shard during shard routing, changed from \texttt{\justify{""test""}} to \texttt{\justify{indexMetaData.getIndex()}} which retrieve shard ID from the index metadata.","     public void testCanRemainUsesLeastAvailableSpace() { 
+         ...
+         shardRoutingMap.put(test_2, ""/node1/most"");
+ 
+-        ShardRouting test_3 = ShardRouting.newUnassigned(""test"", 3, null, true, new UnassignedInfo(UnassignedInfo.Reason.INDEX_CREATED, ""foo""));
++        ShardRouting test_3 = ShardRouting.newUnassigned(indexMetaData.getIndex(), 3, null, true, new UnassignedInfo(UnassignedInfo.Reason.INDEX_CREATED, ""foo""));
+         ShardRoutingHelper.initialize(test_3, node_1.getId());
+         ShardRoutingHelper.moveToStarted(test_3);
+         ...
+     }",b364cf54bfd95326c33f3592417253bec8e1aee8,Feature introduction,Same as \ref{conflict19_branch} which introduced primary terms that track number of promotion of replica shard to primary shard.,"Listing belows shows a change which introduce primary terms. A parameter was added to a method \texttt{\justify{newUnwasassigned}} that pass primary term. In the change, the priary term \texttt{\justify{1}} was passes for testing creating new unassigned shard during shard routing.","     public void testCanRemainUsesLeastAvailableSpace() { 
+         ...
+         assertEquals(0l, DiskThresholdDecider.sizeOfRelocatingShards(node, info, true, ""/dev/some/other/dev""));
+ 
+-        ShardRouting test_3 = ShardRouting.newUnassigned(""test"", 3, null, false, new UnassignedInfo(UnassignedInfo.Reason.INDEX_CREATED, ""foo""));
++        ShardRouting test_3 = ShardRouting.newUnassigned(""test"", 3, null, 1, false, new UnassignedInfo(UnassignedInfo.Reason.INDEX_CREATED, ""foo""));
+         ShardRoutingHelper.initialize(test_3, ""node1"");
+         ...
+     }"
+329,cd8320b1716642ae4b0daec6ebc7623d041df674,e6f9cbce8f76096ea7366922e731cc9e93fb83b9,ec31feca93fdfad9c8b4ef7a757b408ecf18d274,Mon Jan 25 11:42:20 CET 2016,core/src/main/java/org/elasticsearch/search/aggregations/bucket/filters/FiltersAggregator.java,"return new FiltersAggregator(name, factories, filters, keyed, otherBucket ? otherBucketKey : null, context, parent, pipelineAggregators, metaData);","return new FiltersAggregator(name, factories, filters, keyed, otherBucketKey, context, parent, pipelineAggregators, metaData);
+        ","IndexSearcher contextSearcher = context.searchContext().searcher();             if (searcher != contextSearcher) {                 searcher = contextSearcher;                 weights = new Weight[filters.size()];                 for (int i = 0; i < filters.size(); ++i) {                     KeyedFilter keyedFilter = filters.get(i);                     this.weights[i] = contextSearcher.createNormalizedWeight(keyedFilter.filter, false);                 }             }             return new FiltersAggregator(name, factories, keys, weights, keyed, otherBucketKey, context, parent, pipelineAggregators, metaData);",,Change of Method call or object creation,cc41e6e7fe2647dba91711266971d93735c7c00d,Bug fix,"A performance bug in filter or filters aggregation was fixed. The filter aggregation is calculation of metrics using document fields by grouping documents into single bucket using a specified criterion based on the aggregation type. On the other hand, the filters aggregation groups the documents into multiple buckets and each bucket is associated to documents that match a filter (the criteria which was specified). The bug was due to creation of query weights each time when filter aggregation is below terms aggregation (metrics calculated based of a multi-bucket value source) with cardinality (number of term occurrence in documents) of 1000. For example, when searching documents using exact term specified in the inverted index (Lucene index), the term will be searched in every segment (sub-index). To fix this bug, a query weight is created once and iterators are used to look through in all segments.","Listing below shows changes which are part of fixing the performance bug in the filters aggregation. The iterator was added to collect filters \texttt{\justify{filters}} if the \texttt{\justify{searcher}}, which search provided index, is not equal to the context of index search  \texttt{\justify{contextSearcher}}. Then, the filters are passed to filter aggregators \texttt{\justify{FiltersAggregator}}, which group the documents that match the filters for aggregration.","         public Aggregator createInternal(AggregationContext context, Aggregator parent, boolean collectsFromSingleBucket,
+                 List<PipelineAggregator> pipelineAggregators, Map<String, Object> metaData) throws IOException {
+-            return new FiltersAggregator(name, factories, filters, keyed, otherBucketKey, context, parent, pipelineAggregators, metaData);
++            IndexSearcher contextSearcher = context.searchContext().searcher();
++            if (searcher != contextSearcher) {
++                searcher = contextSearcher;
++                weights = new Weight[filters.size()];
++                for (int i = 0; i < filters.size(); ++i) {
++                    KeyedFilter keyedFilter = filters.get(i);
++                    this.weights[i] = contextSearcher.createNormalizedWeight(keyedFilter.filter, false);
++                }
++            }
++            return new FiltersAggregator(name, factories, keys, weights, keyed, otherBucketKey, context, parent, pipelineAggregators, metaData);
+         }
+     }",6df27fe0e03d58b9d54ff1880a849a8765e036f3,Refactoring,"Filters Aggregation were refactored to allow them to be passed to the coordinating node and serialized to the shards. The coordinating node receives a request such as search request from a client, forwards the request to the nodes that hold the data, receives results from the data node, and creates a set of results which is returned to the client.","As part of serializing filters aggregation, a parameter \texttt{\justify{otherBucketKey}} was replaced with \texttt{\justify{otherBucket ? otherBucketKey : null}} to check if an option to include other bucket which contains document that do not match the given filters was set.  The parameter \texttt{\justify{otherBucket}} is used in case a client wants to include aggregation of other buckets in a search response.","         public Aggregator createInternal(AggregationContext context, Aggregator parent, boolean collectsFromSingleBucket,
+                 List<PipelineAggregator> pipelineAggregators, Map<String, Object> metaData) throws IOException {
+-            return new FiltersAggregator(name, factories, filters, keyed, otherBucketKey, context, parent, pipelineAggregators, metaData);
++            return new FiltersAggregator(name, factories, filters, keyed, otherBucket ? otherBucketKey : null, context, parent,
++                    pipelineAggregators, metaData);
++        }"
+362,83a5fe9650c36fa2a416f9da1e4c63b8432fea4b,31afc8a9a575c1965cfec2faab7e3c001a6cf981,d0a10b337ed414eaf8ef3c60452d1a2f92be6ae8,Fri Dec 18 22:45:34 CET 2015,core/src/test/java/org/elasticsearch/gateway/ReplicaShardAllocatorTests.java,".addShard(TestShardRouting.newShardRouting(shardId.getIndex(), shardId.getId(), node1.id(), 1, true, ShardRoutingState.STARTED, 10))                                         .addShard(TestShardRouting.newShardRouting(shardId.getIndex(), shardId.getId(), node2.id(), null, null, 1, false, ShardRoutingState.INITIALIZING, 10, new UnassignedInfo(UnassignedInfo.Reason.CLUSTER_RECOVERED, null)))",".addShard(TestShardRouting.newShardRouting(shardId.getIndex(), shardId.getId(), node1.id(), true, ShardRoutingState.STARTED, 10))
+.addShard(ShardRouting.newUnassigned(shardId.getIndex(), shardId.getId(), null, false, new UnassignedInfo(reason, null)))",".addShard(primaryShard)                                         .addShard(TestShardRouting.newShardRouting(shardId.getIndex(), shardId.getId(), node2.id(), null, null, false, ShardRoutingState.INITIALIZING, 10, new UnassignedInfo(UnassignedInfo.Reason.CLUSTER_RECOVERED, null)))",,Change of Method call or object creation,3a442db9bd4843bb2b12bad9279ecb35f05315cc,Feature enhancement,"The allocation IDs which are used when selecting a primary shard and generated when shard is allocated to a cluster were added to transport action which fetches the shards version in the nodes during the primary shard allocation. The allocation IDs were added to the transport action to be used when allocating the primary shard during cluster or node restart. When the node or cluster restarted, the transport action is used to identify which shards were primary shard and hold recent shard versions. Therefore, the allocation IDS were added to recover the right active shards.","The listing below shows change which were part of adding the allocation IDs to the transport action. An expression \texttt{\justify{TestShardRouting.newShardRouting(shardId.getIndex(), shardId.getId(), node1.id(), true, ShardRoutingState.STARTED, 10)}} which pass a primary shard when building routing table information was extracted to a variable \texttt{\justify{primaryShard}}. Furthermore, a method \texttt{\justify{putActiveAllocationIds}} was added to add active shard allocation IDs when building a metadata \texttt{\justify{metaData}} during the node recovery. ","     private RoutingAllocation onePrimaryOnNode1And1ReplicaRecovering(AllocationDeciders deciders) {
++        ShardRouting primaryShard = TestShardRouting.newShardRouting(shardId.getIndex(), shardId.getId(), node1.id(), true, ShardRoutingState.STARTED, 10);
+         MetaData metaData = MetaData.builder()
+-                .put(IndexMetaData.builder(shardId.getIndex()).settings(settings(Version.CURRENT)).numberOfShards(1).numberOfReplicas(0))
++                .put(IndexMetaData.builder(shardId.getIndex()).settings(settings(Version.CURRENT))
++                    .numberOfShards(1).numberOfReplicas(1)
++                    .putActiveAllocationIds(0, new HashSet<>(Arrays.asList(primaryShard.allocationId().getId()))))
+                 .build();
+         RoutingTable routingTable = RoutingTable.builder()
+                 .add(IndexRoutingTable.builder(shardId.getIndex())
+                                 .addIndexShard(new IndexShardRoutingTable.Builder(shardId)
+-                                        .addShard(TestShardRouting.newShardRouting(shardId.getIndex(), shardId.getId(), node1.id(), true, ShardRoutingState.STARTED, 10))
++                                        .addShard(primaryShard)
+                                         .addShard(TestShardRouting.newShardRouting(shardId.getIndex(), shardId.getId(), node2.id(), null, null, false, ShardRoutingState.INITIALIZING, 10, new UnassignedInfo(UnassignedInfo.Reason.CLUSTER_RECOVERED, null)))
+                                         .build())
+                 )
+                 .build();
+         ...
+    }",b364cf54bfd95326c33f3592417253bec8e1aee8,Feature introduction,Same as \ref{conflict19_branch}. The change introduced primary terms that track promotion of the replica shards to primary shards.,"Listing belows shows changes which introduce primary terms in a test of recovering a node with one primary shard and one replica shard. A parameter was added in method \texttt{\justify{newShardRouting}} and \texttt{\justify{newUnassigned}} to pass primary terms. In the listing, the primary term \texttt{\justify{1}} was passed when creating new shard routing information and new unassigned shard.","     private RoutingAllocation onePrimaryOnNode1And1ReplicaRecovering(AllocationDeciders deciders) {
+         ...
+         RoutingTable routingTable = RoutingTable.builder()
+                 .add(IndexRoutingTable.builder(shardId.getIndex())
+                                 .addIndexShard(new IndexShardRoutingTable.Builder(shardId)
+-                                        .addShard(TestShardRouting.newShardRouting(shardId.getIndex(), shardId.getId(), node1.id(), true, ShardRoutingState.STARTED, 10))
+-                                        .addShard(ShardRouting.newUnassigned(shardId.getIndex(), shardId.getId(), null, false, new UnassignedInfo(reason, null)))
++                                        .addShard(TestShardRouting.newShardRouting(shardId.getIndex(), shardId.getId(), node1.id(), 1, true, ShardRoutingState.STARTED, 10))
++                                        .addShard(ShardRouting.newUnassigned(shardId.getIndex(), shardId.getId(), null, 1, false, new UnassignedInfo(reason, null)))
+                                         .build())
+                 )
+                 .build();
+         ...
+    }"
+367,27d8509f0e95e598d725bc713da07d5b433631c6,99e328c9bfb87a84943ab3357d5d2f0cc07c12a5,7bca97bba6ac012f875d758cc5f49546396b20e2,Tue Dec 15 11:07:19 CET 2015,core/src/main/java/org/elasticsearch/index/shard/IndexShard.java,public void checkIdle(long inactiveTimeNS) {         if (System.nanoTime() - lastWriteNS >= inactiveTimeNS) {,"public boolean checkIdle(long inactiveTimeNS) {        if (System.nanoTime() - lastWriteNS >= inactiveTimeNS) {
+            ",final boolean checkIdle(long inactiveTimeNS) { // pkg private for testing         Engine engineOrNull = getEngineOrNull();         if (engineOrNull != null && System.nanoTime() - engineOrNull.getLastWriteNanos() >= inactiveTimeNS) {,,Change of Method call or object creation,1bff08b2b39cec42536d853779d7e3cbe3fa517b,Test improvement,Test for shard inactiveness was improved so that not to fail when a document is being indexed while the time set for the shard inactiveness elapsed. The API that check if the shard is active was separated to have another that is used only for testing so that the test should not fail if the shard inactiveness time elapsed. ,Listing below shows changes made to separate a method \texttt{\justify{checkIdle}} which check if the shard is idle when indexing a document. The method for testing purpose was made private and a parameter which pass inactive time set is passed.,"-    public boolean checkIdle(long inactiveTimeNS) {
+-        if (System.nanoTime() - lastWriteNS >= inactiveTimeNS) {
+     ...
++    public boolean checkIdle() {
++        return checkIdle(inactiveTime.nanos());
++    }
++
++    final boolean checkIdle(long inactiveTimeNS) { // pkg private for testing
++        Engine engineOrNull = getEngineOrNull();
++        if (engineOrNull != null && System.nanoTime() - engineOrNull.getLastWriteNanos() >= inactiveTimeNS) {
+             boolean wasActive = active.getAndSet(false);
+             if (wasActive) {
+                 updateBufferSize(IndexingMemoryController.INACTIVE_SHARD_INDEXING_BUFFER, IndexingMemoryController.INACTIVE_SHARD_TRANSLOG_BUFFER);
+-                logger.debug(""shard is now inactive"");
+-                indicesLifecycle.onShardInactive(this);
++                logger.debug(""marking shard as inactive (inactive_time=[{}]) indexing wise"", inactiveTime);
++                indexEventListener.onShardInactive(this);
+             }
+         }
+ 
+         return active.get() == false;
+     }",6ae8ca9a5e8e56d012407237453303f1c2ff82f2,Feature enhancement,"Indexing buffer size for shards that have heavy indexing was optimized. The size of the buffer in the indexing process is controlled by the indexing buffer. The change was made to improve optimization of RAM usage for indexing since a default index buffer size of 10\% of node heap is divided up and assigned equally to all shards that are active. The assignment of the node heap to the active shards does not consider shard usage. With this change, each shard is assigned unlimited indexing buffer and the most shard or shards that consuming most of the heap are asked to clear up the heap if total bytes used across all shards exceed the node heap.","As part of implementing the logic for optimizing the indexing buffer, a method \texttt{\justify{checkIdle}} which check if the shard is idle was made \texttt{\justify{void}} and not to update buffer size if it is active.","-    public boolean checkIdle(long inactiveTimeNS) {
+     ...
++    public void checkIdle(long inactiveTimeNS) {
+         if (System.nanoTime() - lastWriteNS >= inactiveTimeNS) {
+             boolean wasActive = active.getAndSet(false);
+             if (wasActive) {
+-                updateBufferSize(IndexingMemoryController.INACTIVE_SHARD_INDEXING_BUFFER, IndexingMemoryController.INACTIVE_SHARD_TRANSLOG_BUFFER);
+                 logger.debug(""shard is now inactive"");
+                 indicesLifecycle.onShardInactive(this);
+             }
+         }
+-
+-        return active.get() == false;
+     }"
+375,27d8509f0e95e598d725bc713da07d5b433631c6,99e328c9bfb87a84943ab3357d5d2f0cc07c12a5,7bca97bba6ac012f875d758cc5f49546396b20e2,Tue Dec 15 11:07:19 CET 2015,core/src/test/java/org/elasticsearch/indices/memory/IndexingMemoryControllerTests.java,"public void simulateIndexing(ShardId shardId) {             Long bytes = indexBufferRAMBytesUsed.get(shardId);             if (bytes == null) {                 bytes = 0L;             }             // Each doc we index takes up a megabyte!             bytes += 1024*1024;             indexBufferRAMBytesUsed.put(shardId, bytes);             forceCheck();         }","public void simulateIndexing(ShardId shardId) {
+    lastIndexTimeNanos.put(shardId, currentTimeInNanos());
+    if (indexingBuffers.containsKey(shardId) == false) {
+        // First time we are seeing this shard; start it off with inactive buffers as IndexShard does:
+        indexingBuffers.put(shardId, IndexingMemoryController.INACTIVE_SHARD_INDEXING_BUFFER);
+        translogBuffers.put(shardId, IndexingMemoryController.INACTIVE_SHARD_TRANSLOG_BUFFER);
+    }  
+        activeShards.add(shardId);             
+        forceCheck();         
+}","public void simulateIndexing(IndexShard shard) {             lastIndexTimeNanos.put(shard, currentTimeInNanos());             if (indexingBuffers.containsKey(shard) == false) {                 // First time we are seeing this shard; start it off with inactive buffers as IndexShard does:                 indexingBuffers.put(shard, IndexingMemoryController.INACTIVE_SHARD_INDEXING_BUFFER);                 translogBuffers.put(shard, IndexingMemoryController.INACTIVE_SHARD_TRANSLOG_BUFFER);             }             activeShards.add(shard);             forceCheck();         }",,Addition of statements in the Same area,5341404f014fbfd0c0b67c61546df38625d9b4ad,Bug fix,"An indexing memory controller which track indexing status of shards was modified to not maintain individual status of each shard. With this change, the indexing memory controller checks status of all shards and resizes the indexing buffers based on shard status, that is, if the shard is idle or not. The change was made to fix a performance regression caused by scenario which version maps of two shards are never resized to defaults when an index is deleted and created and therefore the new shard is not detected by the controller since it has a same shard ID as the deleted shard. The scenario results to increase number of the index merges which affect the performance.","Listing below shows changes made in controller test which are part of fixing performance regression issue. The shard status is obtained when indexing a shard instead of tracking individual shard. Therefore, a parameter of type \texttt{\justify{IndexShard}}, which track indexing of the shard, is passed instead of \texttt{\justify{ShardId}}, which injects shard ID to shard level components. ","-        public void simulateIndexing(ShardId shardId) {
+-            lastIndexTimeNanos.put(shardId, currentTimeInNanos());
+-            if (indexingBuffers.containsKey(shardId) == false) {
++        public void simulateIndexing(IndexShard shard) {
++            lastIndexTimeNanos.put(shard, currentTimeInNanos());
++            if (indexingBuffers.containsKey(shard) == false) {
+                 // First time we are seeing this shard; start it off with inactive buffers as IndexShard does:
+-                indexingBuffers.put(shardId, IndexingMemoryController.INACTIVE_SHARD_INDEXING_BUFFER);
+-                translogBuffers.put(shardId, IndexingMemoryController.INACTIVE_SHARD_TRANSLOG_BUFFER);
++                indexingBuffers.put(shard, IndexingMemoryController.INACTIVE_SHARD_INDEXING_BUFFER);
++                translogBuffers.put(shard, IndexingMemoryController.INACTIVE_SHARD_TRANSLOG_BUFFER);
+             }
+-            activeShards.add(shardId);
++            activeShards.add(shard);
+             forceCheck();
+         }
+     }",f27c0adb0ba09fbd12920af2f3467fb834082c43,Bug fix,"An indexing buffer size for inactive shard was increased once they become active again. If the shard become active, it took up to 30 seconds for the indexing memory controller, which track indexing status of the shards, to increase the buffer size from the idle size to the one assigned along with other active shards. This delay could cause many index segments not written. To fix this issue, the indexing buffer is divided up to all active shards immediately once the inactive shard becomes active.","Listing below shows changes which are part of fixing assignment of indexing buffer once the inactive shard becomes active. In the test \texttt{\justify{simulateIndexing}} which simulate tracking of shard status when indexing, a variable \texttt{\justify{bytes}} track buffer size of the shard during indexing. The tracking time \texttt{\justify{lastIndexTimeNanos}} for shard indexing was removed since shard buffer size is re-assigned once the shard become active again. ","         public void simulateIndexing(ShardId shardId) {
+-            lastIndexTimeNanos.put(shardId, currentTimeInNanos());
+-            if (indexingBuffers.containsKey(shardId) == false) {
+-                // First time we are seeing this shard; start it off with inactive buffers as IndexShard does:
+-                indexingBuffers.put(shardId, IndexingMemoryController.INACTIVE_SHARD_INDEXING_BUFFER);
+-                translogBuffers.put(shardId, IndexingMemoryController.INACTIVE_SHARD_TRANSLOG_BUFFER);
++            Long bytes = indexBufferRAMBytesUsed.get(shardId);
++            if (bytes == null) {
++                bytes = 0L;
+             }
+-            activeShards.add(shardId);
++            // Each doc we index takes up a megabyte!
++            bytes += 1024*1024;
++            indexBufferRAMBytesUsed.put(shardId, bytes);
+             forceCheck();
+         }
+     }"
+382,503a166b7148a79ac6221894eca4835ef68d3480,a8382de09d88ead31fd52a97dda15572f92b1360,afcaa593ae7c5cc4e337e779d307ad31a9010cae,Fri Dec 11 14:32:16 CET 2015,core/src/main/java/org/elasticsearch/action/delete/DeleteResponse.java,RestStatus status = getShardInfo().status();         if (isFound() == false) {             status = NOT_FOUND;         }         return status;,,if (found == false) {             return RestStatus.NOT_FOUND;         }         return super.status();,Changes added on the same space. New changes on the same space,Addition of statements in the Same area,fafeb3abddd8e691e966064bfd3131714e20d8a2,Refactoring,"The shared logic such as creating xContent response of a write operation (index, update and delete) response on a single document was consolidated to have a base logic. The write operation response is used to get back information about the execution of the operation and then contents such as xContent is created from the operation response. With this change, the responses are retrieved using shard IDs which the operations are executed on. ",Listing below shows added changes which were part of consolidating the shared logic for creating response from the write operation response on the single document. A method \texttt{\justify{status}} was added which returns a REST status of the delete operation.,"+    public RestStatus status() {
++        if (found == false) {
++            return RestStatus.NOT_FOUND;
++        }
++        return super.status();
++    }",a2cda4e3f294c65291c182bec6421290dd70bef7,Refactoring,"The responses from \texttt{\justify{put}} and \texttt{\justify{delete}} pipeline APIs, which are used for adding or updating and deleting preprocessors that preprocess documents before indexing, were made consistent with the delete and index APIs, which are used for deleting and adding or updating documents in a specific index respectively. ",Listing below shows changes added to make the put and delete pipeline APIs responses consistent with the delete and index APIs responses. A method \texttt{\justify{status}} which returns status of the delete operation was added.,"+    public RestStatus status() {
++        RestStatus status = getShardInfo().status();
++        if (isFound() == false) {
++            status = NOT_FOUND;
++        }
++        return status;
++    }"
+389,68f1a87c481bc9d7ad77e725a65fb38c8bb5e01b,95e8a39b9bf603799ccd477795f76af6ccdc6420,fafeb3abddd8e691e966064bfd3131714e20d8a2,Thu Dec 10 17:50:56 CET 2015,core/src/main/java/org/elasticsearch/action/support/replication/TransportReplicationAction.java,"try (Releasable shardReference = getIndexShardOperationsCounter(request.internalShardId, request.primaryTerm)) {                 shardOperationOnReplica(request.internalShardId, request);","try (Releasable shardReference = getIndexShardOperationsCounter(request.internalShardId)) {
+    shardOperationOnReplica(request.internalShardId, request);","assert request.shardId() != null : ""request shardId must be set"";             try (Releasable ignored = getIndexShardOperationsCounter(request.shardId())) {                 shardOperationOnReplica(request);                 if (logger.isTraceEnabled()) {                     logger.trace(""action [{}] completed on shard [{}] for request [{}]"", transportReplicaAction, request.shardId(), request);                 }",,Change of Method call or object creation,025e9818e7c3f428aa46187572c40ce7f93fd197,Refactoring,"The operation logic for requests that are executed first on the primary shard and followed on the replica shards was separated to have logic for routing and retrying failed operations, and logic for the delegation of the replication operations. The operation logic was refactored when performing replication of the operations from the primary shard to the replica shards. ",The listing below shows changes which are part of separating the operation logic when performing replication action. The shard ID (or shard version) passed on \texttt{\justify{getIndexShardOperationsCounter}} was changed from \texttt{\justify{request.internalShardId}} to \texttt{\justify{request.shardId()}} which returns the shard ID where the operations should be run.,"    private final class AsyncReplicaAction extends AbstractRunnable {
+         protected void doRun() throws Exception {
+-            try (Releasable shardReference = getIndexShardOperationsCounter(request.internalShardId)) {
+-                shardOperationOnReplica(request.internalShardId, request);
++            assert request.shardId() != null : ""request shardId must be set"";
++            try (Releasable ignored = getIndexShardOperationsCounter(request.shardId())) {
++                shardOperationOnReplica(request);
++                if (logger.isTraceEnabled()) {
++                    logger.trace(""action [{}] completed on shard [{}] for request [{}]"", transportReplicaAction, request.shardId(), request);
++                }
+             }
+             channel.sendResponse(TransportResponse.Empty.INSTANCE);
+         }
+     }",5fb0f9a88ff40b3bc0f9fe81f181dd90ea76c6ea,Feature introduction,Same as \ref{conflict2_branch} which added the counter to identify write operations from the failed primary shard and enforced the primary terms logic (see \ref{conflict19_branch}).,"The listing below shows a change which enforced the primary terms logic. A parameter which pass the primary term, \texttt{\justify{request.primaryTerm}}, was added to the method \texttt{\justify{getIndexShardOperationsCounter}} that gets number of operations during shard indexing. ","    private final class AsyncReplicaAction extends AbstractRunnable {
+         protected void doRun() throws Exception {
+-            try (Releasable shardReference = getIndexShardOperationsCounter(request.internalShardId)) {
++            try (Releasable shardReference = getIndexShardOperationsCounter(request.internalShardId, request.primaryTerm)) {
+                 shardOperationOnReplica(request.internalShardId, request);
+             }
+             channel.sendResponse(TransportResponse.Empty.INSTANCE);
+         }
+     }"
+395,68f1a87c481bc9d7ad77e725a65fb38c8bb5e01b,95e8a39b9bf603799ccd477795f76af6ccdc6420,fafeb3abddd8e691e966064bfd3131714e20d8a2,Thu Dec 10 17:50:56 CET 2015,core/src/main/java/org/elasticsearch/action/update/UpdateHelper.java,"UpdateResponse update = new UpdateResponse(new ShardId(getResult.getIndex(), request.shardId()), getResult.getType(), getResult.getId(), getResult.getVersion(), false);","UpdateResponse update = new UpdateResponse(getResult.getIndex(), getResult.getType(), getResult.getId(), getResult.getVersion(), false);","UpdateResponse update = new UpdateResponse(shardId, getResult.getType(), getResult.getId(), getResult.getVersion(), false);",,Change of Method call or object creation,fafeb3abddd8e691e966064bfd3131714e20d8a2,Refactoring,Same as \ref{conflict26_mainline} which refactored shared logic such as an xContent response of write operations on the single document.,"The listing below shows two same changes which are part of the consolidation of the shared logic of write operations. The changes were made to pass shard ID \texttt{\justify{shardId}} instead of the document index \texttt{\justify{getResult.getIndex()}} when creating new response for an operation on the document that did not interpreted as the write operation, that is, the operation did not update the document.","     protected Result prepare(UpdateRequest request, final GetResult getResult) {
+         ...
+         if (operation == null || ""index"".equals(operation)) {
+             ...
+         } else if (""delete"".equals(operation)) {
+             ...
+             return new Result(deleteRequest, Operation.DELETE, updatedSourceAsMap, updateSourceContentType);
+         } else if (""none"".equals(operation)) {
+-            UpdateResponse update = new UpdateResponse(getResult.getIndex(), getResult.getType(), getResult.getId(), getResult.getVersion(), false);
++            UpdateResponse update = new UpdateResponse(shardId, getResult.getType(), getResult.getId(), getResult.getVersion(), false);
+             update.setGetResult(extractGetResult(request, request.index(), getResult.getVersion(), updatedSourceAsMap, updateSourceContentType, getResult.internalSourceRef()));
+             return new Result(update, Operation.NONE, updatedSourceAsMap, updateSourceContentType);
+         } else {
+             logger.warn(""Used update operation [{}] for script [{}], doing nothing..."", operation, request.script.getScript());
+-            UpdateResponse update = new UpdateResponse(getResult.getIndex(), getResult.getType(), getResult.getId(), getResult.getVersion(), false);
++            UpdateResponse update = new UpdateResponse(shardId, getResult.getType(), getResult.getId(), getResult.getVersion(), false);
+             return new Result(update, Operation.NONE, updatedSourceAsMap, updateSourceContentType);
+         }
+     }",5fb0f9a88ff40b3bc0f9fe81f181dd90ea76c6ea,Feature introduction,"Same as \ref{conflict2_branch} which added the counter to identify write operations from the failed primary shard. Also, it is similar to the mainline change, however, it was combined in broad change of adding the counters. ","The listing below shows changes which were made as part of introducing the counter for identifying operations from the failed primary shard. A parameter \texttt{\justify{new ShardId(getResult.getIndex(), request.shardId())}} which pass a new information on a shard that the operation is executed on is passed when creating a new document update response, which for this case is the update response for a non-write operation.","     protected Result prepare(UpdateRequest request, final GetResult getResult) {
+         ...
+         if (operation == null || ""index"".equals(operation)) {
+             ...
+         } else if (""delete"".equals(operation)) {
+             ...
+             return new Result(deleteRequest, Operation.DELETE, updatedSourceAsMap, updateSourceContentType);
+         } else if (""none"".equals(operation)) {
+-            UpdateResponse update = new UpdateResponse(getResult.getIndex(), getResult.getType(), getResult.getId(), getResult.getVersion(), false);
++            UpdateResponse update = new UpdateResponse(new ShardId(getResult.getIndex(), request.shardId()), getResult.getType(), getResult.getId(), getResult.getVersion(), false);
+             update.setGetResult(extractGetResult(request, request.index(), getResult.getVersion(), updatedSourceAsMap, updateSourceContentType, getResult.internalSourceRef()));
+             return new Result(update, Operation.NONE, updatedSourceAsMap, updateSourceContentType);
+         } else {
+             logger.warn(""Used update operation [{}] for script [{}], doing nothing..."", operation, request.script.getScript());
+-            UpdateResponse update = new UpdateResponse(getResult.getIndex(), getResult.getType(), getResult.getId(), getResult.getVersion(), false);
++            UpdateResponse update = new UpdateResponse(new ShardId(getResult.getIndex(), request.shardId()), getResult.getType(), getResult.getId(), getResult.getVersion(), false);
+             return new Result(update, Operation.NONE, updatedSourceAsMap, updateSourceContentType);
+         }
+     }"
+401,68f1a87c481bc9d7ad77e725a65fb38c8bb5e01b,95e8a39b9bf603799ccd477795f76af6ccdc6420,fafeb3abddd8e691e966064bfd3131714e20d8a2,Thu Dec 10 17:50:56 CET 2015,core/src/main/java/org/elasticsearch/rest/action/update/RestUpdateAction.java,"client.update(updateRequest, new RestBuilderListener<UpdateResponse>(channel) {             @Override             public RestResponse buildResponse(UpdateResponse response, XContentBuilder builder) throws Exception {                 builder.startObject();                 response.toXContent(builder, request);                 builder.endObject();                 RestStatus status = response.getShardInfo().status();                 if (response.isCreated()) {                     status = CREATED;                 }                 return new BytesRestResponse(status, builder);             }         });","client.update(updateRequest, new RestBuilderListener<UpdateResponse>(channel) {
+        @Override
+        public RestResponse buildResponse(UpdateResponse response, XContentBuilder builder) throws Exception {
+            builder.startObject();
+            ActionWriteResponse.ShardInfo shardInfo = response.getShardInfo();
+            builder.field(Fields._INDEX, response.getIndex())
+                    .field(Fields._TYPE, response.getType())
+                    .field(Fields._ID, response.getId())
+                    .field(Fields._VERSION, response.getVersion());
+
+            shardInfo.toXContent(builder, request);
+            if (response.getGetResult() != null) {
+                builder.startObject(Fields.GET);
+                response.getGetResult().toXContentEmbedded(builder, request);
+                builder.endObject();
+            }
+
+            builder.endObject();
+            RestStatus status = shardInfo.status();
+            if (response.isCreated()) {
+                status = CREATED;
+            }
+            return new BytesRestResponse(status, builder);
+        }
+    });
+}
+
+cstatic final class Fields {
+    static final XContentBuilderString _INDEX = new XContentBuilderString(""_index"");
+    static final XContentBuilderString _TYPE = new XContentBuilderString(""_type"");
+    static final XContentBuilderString _ID = new XContentBuilderString(""_id"");
+    static final XContentBuilderString _VERSION = new XContentBuilderString(""_version"");
+    static final XContentBuilderString GET = new XContentBuilderString(""get"");
+    ","client.update(updateRequest, new RestStatusToXContentListener<>(channel));",,Change of Method call or object creation,fafeb3abddd8e691e966064bfd3131714e20d8a2,Refactoring,Same as \ref{conflict26_mainline} which refactored shared logic such as an xContent response of write operations on the single document.,"The listing below shows changes made to unify the xContent response logic of the write operations. The changes were made so that the document update by a client \texttt{\justify{client}} alerts \texttt{\justify{RestStatusToXContentListener}}, which builds the xContent response, instead of \texttt{\justify{RestBuilderListener}}, which builds a response based on the xContent builder.","     public void handleRequest(final RestRequest request, final RestChannel channel, final Client client) throws Exception {
+-        client.update(updateRequest, new RestBuilderListener<UpdateResponse>(channel) {
+-            @Override
+-            public RestResponse buildResponse(UpdateResponse response, XContentBuilder builder) throws Exception {
+-                builder.startObject();
+-                ActionWriteResponse.ShardInfo shardInfo = response.getShardInfo();
+-                builder.field(Fields._INDEX, response.getIndex())
+-                        .field(Fields._TYPE, response.getType())
+-                        .field(Fields._ID, response.getId())
+-                        .field(Fields._VERSION, response.getVersion());
+-
+-                shardInfo.toXContent(builder, request);
+-                if (response.getGetResult() != null) {
+-                    builder.startObject(Fields.GET);
+-                    response.getGetResult().toXContentEmbedded(builder, request);
+-                    builder.endObject();
+-                }
+-
+-                builder.endObject();
+-                RestStatus status = shardInfo.status();
+-                if (response.isCreated()) {
+-                    status = CREATED;
+-                }
+-                return new BytesRestResponse(status, builder);
+-            }
+-        });
+-    }
+-
+-    static final class Fields {
+-        static final XContentBuilderString _INDEX = new XContentBuilderString(""_index"");
+-        static final XContentBuilderString _TYPE = new XContentBuilderString(""_type"");
+-        static final XContentBuilderString _ID = new XContentBuilderString(""_id"");
+-        static final XContentBuilderString _VERSION = new XContentBuilderString(""_version"");
+-        static final XContentBuilderString GET = new XContentBuilderString(""get"");
++        client.update(updateRequest, new RestStatusToXContentListener<>(channel));
+     }
+ }",5fb0f9a88ff40b3bc0f9fe81f181dd90ea76c6ea,Feature introduction,Same as \ref{conflict2_branch}.,The listing below shows changes as part of adding the counter to identify the write operations from old primary shard. The changes were made to use a method \texttt{\justify{toXContent}} from a new response base class \texttt{\justify{DocWriteResponse}} created from the extracted shared logic of write operations on a single document and receive REST status \texttt{\justify{status}} from the shard information in the operation response. ,"     public void handleRequest(final RestRequest request, final RestChannel channel, final Client client) throws Exception {
+        client.update(updateRequest, new RestBuilderListener<UpdateResponse>(channel) {       
+             @Override
+             public RestResponse buildResponse(UpdateResponse response, XContentBuilder builder) throws Exception {
+                 builder.startObject();
+-                ActionWriteResponse.ShardInfo shardInfo = response.getShardInfo();
+-                builder.field(Fields._INDEX, response.getIndex())
+-                        .field(Fields._TYPE, response.getType())
+-                        .field(Fields._ID, response.getId())
+-                        .field(Fields._VERSION, response.getVersion());
+-
+-                shardInfo.toXContent(builder, request);
+-                if (response.getGetResult() != null) {
+-                    builder.startObject(Fields.GET);
+-                    response.getGetResult().toXContentEmbedded(builder, request);
+-                    builder.endObject();
+-                }
+-
++                response.toXContent(builder, request);
+                 builder.endObject();
+-                RestStatus status = shardInfo.status();
++                RestStatus status = response.getShardInfo().status();
+                 if (response.isCreated()) {
+                     status = CREATED;
+                 }
+                 return new BytesRestResponse(status, builder);  
+             }
+         });
+     }"
+405,95e8a39b9bf603799ccd477795f76af6ccdc6420,bffd55dd040c6918a0d2bb5cfd0c62e9b9ea72d3,54022774620dd1ec5789576a9985eb96f5493152,Mon Dec 07 14:03:31 CET 2015,core/src/main/java/org/elasticsearch/cluster/ClusterState.java,"builder.startObject(""primary_terms"");                 for (int shard = 0; shard < indexMetaData.getNumberOfShards(); shard++) {                     builder.field(Integer.toString(shard), indexMetaData.primaryTerm(shard));",,builder.startObject(IndexMetaData.KEY_ACTIVE_ALLOCATIONS);                 for (IntObjectCursor<Set<String>> cursor : indexMetaData.getActiveAllocationIds()) {                     builder.startArray(String.valueOf(cursor.key));                     for (String allocationId : cursor.value) {                         builder.value(allocationId);                     }                     builder.endArray();,Changes added on the same space. New changes on the same space,Addition of statements in the Same area,fef043a5bfca62deb8b9e20ace59c619983f0e1f,Feature enhancement,"The allocation IDs, which are generated during shard allocation to a cluster, were persisted to index metadata so that to be used when choosing a next primary shard. This change is part of an enhancement to allocate a primary shard based on the allocation IDs of active shards in a current cluster state, which provide state information of the cluster, when the cluster is restarted.","The listing below shows changes added to persist the allocations IDs \texttt{\justify{allocationId}} in the cluster state. The cluster state information can be filtered using five metrics which are; version, master\_node, nodes, routing\_table, metadata and blocks. The changes were added for the metadata metric which returns only the metadata of the response.","     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+         EnumSet<Metric> metrics = Metric.parseString(params.param(""metric"", ""_all""), true);
+         ...
+         if (metrics.contains(Metric.METADATA)) {
+             ...
+             for (IndexMetaData indexMetaData : metaData()) {
+                 ...
++                builder.startObject(IndexMetaData.KEY_ACTIVE_ALLOCATIONS);
++                for (IntObjectCursor<Set<String>> cursor : indexMetaData.getActiveAllocationIds()) {
++                    builder.startArray(String.valueOf(cursor.key));
++                    for (String allocationId : cursor.value) {
++                        builder.value(allocationId);
++                    }
++                    builder.endArray();
++                }
++                builder.endObject();
++
+                 builder.endObject();
+             }
+             builder.endObject();
+             ...
+         }
+         ...
+         return builder;
+     }",b364cf54bfd95326c33f3592417253bec8e1aee8,Feature introduction,Same as \ref{conflict19_branch} which introduced primary terms to track how many times a replica shard is promoted to a primary shard when an older primary shard failed so that to identify if there are operations are coming from the old primary shard.,Listing belows shows changes which introduce primary terms when building response for the cluster state request. The changes were added when the request is filtered using metadata metric which returns only the metadata of the cluster state. ,"     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+         EnumSet<Metric> metrics = Metric.parseString(params.param(""metric"", ""_all""), true);
+         ...
+         if (metrics.contains(Metric.METADATA)) {
+             ...
+             for (IndexMetaData indexMetaData : metaData()) {
+                 ... 
++                builder.startObject(""primary_terms"");
++                for (int shard = 0; shard < indexMetaData.getNumberOfShards(); shard++) {
++                    builder.field(Integer.toString(shard), indexMetaData.primaryTerm(shard));
++                }
++                builder.endObject();
++
+                 builder.endObject();
+             }
+             builder.endObject();
+             ...
+         }
+         ...
+         return builder;
+     }"
+407,95e8a39b9bf603799ccd477795f76af6ccdc6420,bffd55dd040c6918a0d2bb5cfd0c62e9b9ea72d3,54022774620dd1ec5789576a9985eb96f5493152,Mon Dec 07 14:03:31 CET 2015,core/src/main/java/org/elasticsearch/cluster/metadata/IndexMetaData.java,"primaryTerms = after.primaryTerms;             mappings = DiffableUtils.diff(before.mappings, after.mappings);             aliases = DiffableUtils.diff(before.aliases, after.aliases);             customs = DiffableUtils.diff(before.customs, after.customs);","mappings = DiffableUtils.diff(before.mappings, after.mappings);
+aliases = DiffableUtils.diff(before.aliases, after.aliases);
+customs = DiffableUtils.diff(before.customs, after.customs);","mappings = DiffableUtils.diff(before.mappings, after.mappings, DiffableUtils.getStringKeySerializer());             aliases = DiffableUtils.diff(before.aliases, after.aliases, DiffableUtils.getStringKeySerializer());             customs = DiffableUtils.diff(before.customs, after.customs, DiffableUtils.getStringKeySerializer());             activeAllocationIds = DiffableUtils.diff(before.activeAllocationIds, after.activeAllocationIds,                     DiffableUtils.getVIntKeySerializer(), DiffableUtils.StringSetValueSerializer.getInstance());",,Addition of statements in the Same area,fef043a5bfca62deb8b9e20ace59c619983f0e1f,Feature enhancement,Same as \ref{conflict30_mainline}.,"Listing below shows changes which are part of persisting allocation IDs to enhance allocation of primary during cluster restart. A variable \texttt{\justify{activeAllocationIds}} was added to persist allocation IDs during creation of a new cluster’s state \textit{diff}. Furthermore, a new parameter was added to method \texttt{\justify{diff}}, which create a \textit{diff} of two immutable maps, in \texttt{\justify{DiffableUtils}}. Therefore, the value for variables mappings, aliases, and customs were modified to pass the value \texttt{\justify{DiffableUtils.getStringKeySerializer()}} for the new parameter which returns serializer for the strings keys.","         public IndexMetaDataDiff(IndexMetaData before, IndexMetaData after) {
+             ...
+             settings = after.settings;
+-            mappings = DiffableUtils.diff(before.mappings, after.mappings);
+-            aliases = DiffableUtils.diff(before.aliases, after.aliases);
+-            customs = DiffableUtils.diff(before.customs, after.customs);
++            mappings = DiffableUtils.diff(before.mappings, after.mappings, DiffableUtils.getStringKeySerializer());
++            aliases = DiffableUtils.diff(before.aliases, after.aliases, DiffableUtils.getStringKeySerializer());
++            customs = DiffableUtils.diff(before.customs, after.customs, DiffableUtils.getStringKeySerializer());
++            activeAllocationIds = DiffableUtils.diff(before.activeAllocationIds, after.activeAllocationIds,
++                    DiffableUtils.getVIntKeySerializer(), DiffableUtils.StringSetValueSerializer.getInstance());
+         }",b364cf54bfd95326c33f3592417253bec8e1aee8,Feature introduction,Same as in change \ref{conflict19_branch}.,"In the listing below, a variable \texttt{\justify{primaryTerms}} was added to identify operations that are coming from a failed primary shard when creating new \textit{diff} for a cluster state.","         public IndexMetaDataDiff(IndexMetaData before, IndexMetaData after) {
+             ...
+             version = after.version;
+             state = after.state;
+             settings = after.settings;
++           primaryTerms = after.primaryTerms;
+             mappings = DiffableUtils.diff(before.mappings, after.mappings);
+             aliases = DiffableUtils.diff(before.aliases, after.aliases);
+             customs = DiffableUtils.diff(before.customs, after.customs);
+         }"
+420,d68b8101e1551576122c0e8d4b47d6a9c5475190,1e5af7b6f382b822df5ba188b5fc7ff750ba17cc,6a2fa73fb5309935ed5b42d4cfa8f47b47dacc59,Thu Nov 19 11:04:36 CET 2015,core/src/test/java/org/elasticsearch/cluster/routing/allocation/PrimaryElectionRoutingTests.java,RoutingTable prevRoutingTable = clusterState.routingTable();         result = strategy.reroute(clusterState);         clusterState = ClusterState.builder(clusterState).routingResult(result).build();,"prevRoutingTable = routingTable;
+routingTable = strategy.reroute(clusterState).routingTable();
+clusterState = ClusterState.builder(clusterState).routingTable(routingTable).build();","prevRoutingTable = routingTable;         routingTable = strategy.reroute(clusterState, ""reroute"").routingTable();         clusterState = ClusterState.builder(clusterState).routingTable(routingTable).build();",,Change of Method call or object creation,e31d66d137a29ac18b31973e9cdb906697d1826b,Feature enhancement,"The cluster health status change, from red to green or yellow, from green to yellow or red, from yellow to red or green, and vice versa, was logged for tracing or debugging purpose. The cluster health changes are logged on info level. The log messages can be logged in six levels depending on the severity of a situation or action. The log levels are debug, error, info, fatal, trace and warn. The info level is used to log messages that are generally important for normal operation of an application or system.","Listing below shows a change which is part of logging the cluster health status change. A parameter which provide a reason for the change was added to a method \texttt{\justify{reroute}} which reroutes a routing table, that provide mapping between nodes and its shards and indexes they host, using live nodes as a criterion. In the test, the parameter value \texttt{\justify{""reroute""}} is passed as the reason for the cluster health change when rerouting the routing table.","      public void testBackupElectionToPrimaryWhenPrimaryCanBeAllocatedToAnotherNode() {
+         ...
+         logger.info(""Adding third node and reroute and kill first node"");
+         clusterState = ClusterState.builder(clusterState).nodes(DiscoveryNodes.builder(clusterState.nodes()).put(newNode(""node3"")).remove(""node1"")).build();
+         prevRoutingTable = routingTable;
+-        routingTable = strategy.reroute(clusterState).routingTable();
++        routingTable = strategy.reroute(clusterState, ""reroute"").routingTable();
+         clusterState = ClusterState.builder(clusterState).routingTable(routingTable).build();
+         routingNodes = clusterState.getRoutingNodes();
+         ...
+      }",b364cf54bfd95326c33f3592417253bec8e1aee8,Feature introduction,Same as change \ref{conflict19_branch} which introduced the primary terms to track number of replica shard promotion to primary shard. ,"The listing below shows changes which were made as part of introducing primary terms. The listing shows test on retaining a primary shard when the primary can be allocated to another node during rerouting. In the listing, a current routing table \texttt{\justify{routingTable}} is compared with a previous routing table \texttt{\justify{prevRoutingTable}} routing table.","      public void testBackupElectionToPrimaryWhenPrimaryCanBeAllocatedToAnotherNode() {
+         ...
+         logger.info(""Adding third node and reroute and kill first node"");
+         clusterState = ClusterState.builder(clusterState).nodes(DiscoveryNodes.builder(clusterState.nodes()).put(newNode(""node3"")).remove(""node1"")).build();
+-        prevRoutingTable = routingTable;
+-        routingTable = strategy.reroute(clusterState).routingTable();
+-        clusterState = ClusterState.builder(clusterState).routingTable(routingTable).build();
++        RoutingTable prevRoutingTable = clusterState.routingTable();
++        result = strategy.reroute(clusterState);
++        clusterState = ClusterState.builder(clusterState).routingResult(result).build();
+         routingNodes = clusterState.getRoutingNodes();
++        routingTable = clusterState.routingTable();
+ 
+         assertThat(prevRoutingTable != routingTable, equalTo(true));
+         ...
+      }"
+430,ba68a8df63f45af12642b0874ac64dd4841fc832,672a54b39a40ea3cbddcd5d861aa71316d9df268,3ab39385016377778a50df1023d1a944304cefa1,Mon Oct 05 20:00:53 CEST 2015,core/src/main/java/org/elasticsearch/index/IndexService.java,"HashMap<Integer, IndexShardInjectorPair> newShards = new HashMap<>(shards);         IndexShardInjectorPair indexShardInjectorPair = newShards.remove(shardId);         indexShard = indexShardInjectorPair.getIndexShard();         shardInjector = indexShardInjectorPair.getInjector();         shards = unmodifiableMap(newShards);         closeShardInjector(reason, sId, shardInjector, indexShard);","HashMap<Integer, IndexShardInjectorPair> tmpShardsMap = new HashMap<>(shards);
+IndexShardInjectorPair indexShardInjectorPair = tmpShardsMap.remove(shardId);
+indexShard = indexShardInjectorPair.getIndexShard();
+shardInjector = indexShardInjectorPair.getInjector();
+shards = unmodifiableMap(newShards);","HashMap<Integer, IndexShard> tmpShardsMap = new HashMap<>(shards);         indexShard = tmpShardsMap.remove(shardId);         shards = ImmutableMap.copyOf(tmpShardsMap);         closeShard(reason, sId, indexShard, indexShard.store());",,Change of Method call or object creation,c0eca94a044eec90be859f28a6b0cd652c789714,Refactoring,Dependency injector on the shard level was removed and replaced with constructor calls. ,"The listing below shows changes which are part of replacing injector with constructor calls on the shard level. The \texttt{\justify{HashMap}} of type \texttt{\justify{IndexShardInjectorPair}} was changed to \texttt{\justify{IndexShard}} and a variable \texttt{\justify{indexShardInjectorPair}} which holds shard indexing instance and its injector was removed. Furthermore, the shard injector \texttt{\justify{shardInjector}} passed to the method \texttt{\justify{closeShard}}, which closes shard so that not to allow operations on it when the changes on the engine are rolled back, was changed to  \texttt{\justify{indexShard}} which is an instance variable of shard indexing.","     public synchronized void removeShard(int shardId, String reason) {
+         ...
+         logger.debug(""[{}] closing... (reason: [{}])"", shardId, reason);
+-        HashMap<Integer, IndexShardInjectorPair> tmpShardsMap = new HashMap<>(shards);
+-        IndexShardInjectorPair indexShardInjectorPair = tmpShardsMap.remove(shardId);
+-        indexShard = indexShardInjectorPair.getIndexShard();
+-        shardInjector = indexShardInjectorPair.getInjector();
++        HashMap<Integer, IndexShard> tmpShardsMap = new HashMap<>(shards);
++        indexShard = tmpShardsMap.remove(shardId);
+         shards = ImmutableMap.copyOf(tmpShardsMap);
+-        closeShardInjector(reason, sId, shardInjector, indexShard);
++        closeShard(reason, sId, indexShard, indexShard.store());
+         logger.debug(""[{}] closed (reason: [{}])"", shardId, reason);
+     }",46d10f1b6f200d1350b694fa35e42fb04e533635,Library removal,"An immutable map, which maps values from keys and cannot be changed, was removed in the Elasticsearch project codebase. The change was part of removing Guava\footnote{\url{https://github.com/google/guava}}, which is a collection of Java core libraries. The immutable map was part of the collection.","The changes in the listing below are part of removing immutable map. The immutable map \texttt{\justify{shards}} was modified to use method \texttt{\justify{unmodifiableMap}} from Java collections class as \texttt{\justify{ImmutableMap}} class was removed from the project. Furthermore, the variable \texttt{\justify{ tmpShardsMap}} was renamed to \texttt{\justify{newShards}}.","     public synchronized void removeShard(int shardId, String reason) {
+         ...
+         logger.debug(""[{}] closing... (reason: [{}])"", shardId, reason);
+-        HashMap<Integer, IndexShardInjectorPair> tmpShardsMap = new HashMap<>(shards);
+-        IndexShardInjectorPair indexShardInjectorPair = tmpShardsMap.remove(shardId);
++        HashMap<Integer, IndexShardInjectorPair> newShards = new HashMap<>(shards);
++        IndexShardInjectorPair indexShardInjectorPair = newShards.remove(shardId);
+         indexShard = indexShardInjectorPair.getIndexShard();
+         shardInjector = indexShardInjectorPair.getInjector();
+-        shards = ImmutableMap.copyOf(tmpShardsMap);
++        shards = unmodifiableMap(newShards);
+         closeShardInjector(reason, sId, shardInjector, indexShard);
+         logger.debug(""[{}] closed (reason: [{}])"", shardId, reason);
+     }"
+445,1228a9fe55582f99afff2c356408008b069c704b,197313c19be74f40222bf20f742071e1b266d5d0,c8d1f7aa673e20a8806826b86b348dd34f9b4864,Fri Sep 18 20:35:56 CEST 2015,core/src/test/java/org/elasticsearch/percolator/PercolatorBackwardsCompatibilityIT.java,"assertThat(e.getRootCause(), instanceOf(QueryShardException.class));","assertThat(e.getRootCause(), instanceOf(QueryParsingException.class));
+","assertThat(e.getRootCause(), instanceOf(ParsingException.class));",,Change of an assert statement Expression,effaaf056643aa31f92dc84be093d21d69bbc1f1,Refactoring,Query parsing exception was renamed to parsing exception which is more generic so that it can be reused rather than creating subclasses. ,Listing below shows a change which was part of renaming query parsing exception to parsing exception. The class \texttt{\justify{QueryParsingException}} was renamed to \texttt{\justify{ParsingException}}. ,"     public void testPercolatorUpgrading() throws Exception {
+         ...
+         try {
+             client().prepareIndex(""test2"", PercolatorService.TYPE_NAME)
+                     .setSource(jsonBuilder().startObject().field(""query"", termQuery(""field1"", ""value"")).endObject()).get();
+             fail();
+         } catch (PercolatorException e) {
+             e.printStackTrace();
+-            assertThat(e.getRootCause(), instanceOf(QueryParsingException.class));
++            assertThat(e.getRootCause(), instanceOf(ParsingException.class));
+         }
+     }",904cbf53409ae62bb67cd07c31ef88121cff9361,Refactoring,Context for query parsing was separated to have two different steps for query parsing and shard querying. The change was made as it might be required to run the steps in separate phases such as on shards and master node. The query parsing context is used to parse xContent from the request and shard querying context is used when creating Lucene query on the shard level.,The listing below shows part of a change to separate the query parsing context. The class \texttt{\justify{QueryParsingException}} which is used when parsing queries from the given query parsing context was renamed to \texttt{\justify{QueryShardException}}.,"     public void testPercolatorUpgrading() throws Exception {
+         ...
+         try {
+             client().prepareIndex(""test2"", PercolatorService.TYPE_NAME)
+                     .setSource(jsonBuilder().startObject().field(""query"", termQuery(""field1"", ""value"")).endObject()).get();
+             fail();
+         } catch (PercolatorException e) {
+             e.printStackTrace();
+-            assertThat(e.getRootCause(), instanceOf(QueryParsingException.class));
++            assertThat(e.getRootCause(), instanceOf(QueryShardException.class));
+         }
+     }"
+449,73f7df510e45d36e9892dfbbf219a66df2d7322e,d49a744b7eceaf85191778f4d074b3607508a07d,2c618a11de0ef2497f1a0b5d7cccf5ad4e7ff4d0,Fri Sep 11 14:15:12 CEST 2015,core/src/main/java/org/elasticsearch/index/query/HasParentQueryBuilder.java,"query.toXContent(builder, params);         builder.field(""parent_type"", type);         builder.field(""score"", score);         printBoostAndQueryName(builder);",,"queryBuilder.toXContent(builder, params);         builder.field(""parent_type"", parentType);         if (scoreMode != null) {             builder.field(""score_mode"", scoreMode);         }         if (boost != 1.0f) {             builder.field(""boost"", boost);         }         if (queryName != null) {             builder.field(""_name"", queryName);         }",,Addition of statements in the Same area,ab0847e0df6e7f0a9d6788ba0750a0c81b2fd46d,Refactoring,"The \texttt{\justify{score type}} field which was used in \texttt{\justify{has child}} and \texttt{\justify{has parent}} joining queries when querying child and parent documents respectively in a query domain specific language (DSL) to specify a query score type (\texttt{\justify{max}}, \texttt{\justify{min}}, \texttt{\justify{avg}}, \texttt{\justify{sum}} or \texttt{\justify{none}}), was replaced with the \texttt{\justify{score mode}} field. The \texttt{\justify{score mode}} field exist in Lucene, therefore it was favored instead of the \texttt{\justify{score type}} field. Furthermore, in this change, the score type (score mode) \texttt{\justify{sum}} was replaced with \texttt{\justify{total}} which also exist in the Lucene.","In the listing below, a method \texttt{\justify{scoreType}} was renamed to \texttt{\justify{scoreMode}}. ","     protected void doXContent(XContentBuilder builder, Params params) throws IOException {
+         builder.startObject(HasParentQueryParser.NAME);
+         builder.field(""query"");
+         queryBuilder.toXContent(builder, params);
+         builder.field(""parent_type"", parentType);
+-        if (scoreType != null) {
+-            builder.field(""score_type"", scoreType);
++        if (scoreMode != null) {
++            builder.field(""score_mode"", scoreMode);
+         }
+         if (boost != 1.0f) {
+             builder.field(""boost"", boost);
+         }
+         ...
+     }",18bec264f95b0d3641b0c9ee38d8c9486cb66ea6,Refactoring,"Parsing of an index search query for \texttt{\justify{has child}} query, which query child documents, was refactored to separate its parsing in the Elasticsearch and Lucene query creation. First, the query is parsed to create an xContent object which can be streamed. Then, the object is converted to the Lucene query. This change allows among other things to easily test the creation of the xContent parsing since the parsing is in one place.","The listing below shows a change which refactored \texttt{\justify{has child}} query parsing. As part of separating parsing of the index search query for the \texttt{\justify{has child}} query, the method \texttt{\justify{doXContent}} was refactored to remove parsing for the Lucene query creation. A new method \texttt{\justify{doToQuery}} was added forr the removed parsing for creating  the Lucene query.","-    protected void doXContent(XContentBuilder builder, Params params) throws IOException {
+-        builder.startObject(HasParentQueryParser.NAME);
+-        builder.field(""query"");
+-        queryBuilder.toXContent(builder, params);
+-        builder.field(""parent_type"", parentType);
+-        if (scoreType != null) {
+-            builder.field(""score_type"", scoreType);
++    protected Query doToQuery(QueryShardContext context) throws IOException {
++        Query innerQuery = query.toQuery(context);
++        if (innerQuery == null) {
++            return null;
+         }
+-        if (boost != 1.0f) {
+-            builder.field(""boost"", boost);
++        innerQuery.setBoost(boost);
++        DocumentMapper parentDocMapper = context.mapperService().documentMapper(type);
++        if (parentDocMapper == null) {
++            throw new QueryParsingException(context.parseContext(), ""[has_parent] query configured 'parent_type' ["" + type
++                    + ""] is not a valid type"");
+         }
+-        if (queryName != null) {
+-            builder.field(""_name"", queryName);
+         ...
++    }
++
++    @Override
++    protected void doXContent(XContentBuilder builder, Params params) throws IOException {
++        builder.startObject(NAME);
++        builder.field(""query"");
++        query.toXContent(builder, params);
++        builder.field(""parent_type"", type);
++        builder.field(""score"", score);
++        printBoostAndQueryName(builder);
+         if (innerHit != null) {
+-            builder.startObject(""inner_hits"");
+-            builder.value(innerHit);
+-            builder.endObject();
++           innerHit.toXContent(builder, params);
+         }
+         builder.endObject();
+     }"
+482,73f7df510e45d36e9892dfbbf219a66df2d7322e,d49a744b7eceaf85191778f4d074b3607508a07d,2c618a11de0ef2497f1a0b5d7cccf5ad4e7ff4d0,Fri Sep 11 14:15:12 CEST 2015,core/src/test/java/org/elasticsearch/search/child/ChildQuerySearchIT.java,"response = minMaxQuery(ScoreType.SUM, 0, 3);","response = minMaxQuery(""sum"", 0, 3);","response = minMaxQuery(""total"", 0, 3);",,Change of Method call or object creation,ab0847e0df6e7f0a9d6788ba0750a0c81b2fd46d,Refactoring,Same as \ref{conflict35_mainline} which replaced \texttt{\justify{score type}} field with \texttt{\justify{score mode}} in joining queries when querying a document.,The listing below shows a change which replaced a score mode \texttt{\justify{sum}} with \texttt{\justify{total}} in a \texttt{\justify{has child}} joining query search test.,"      public void testMinMaxChildren() throws Exception {
+         ...
+         assertThat(response.getHits().hits()[2].id(), equalTo(""2""));
+         assertThat(response.getHits().hits()[2].score(), equalTo(1f));
+ 
+-        response = minMaxQuery(""sum"", 0, 3);
++        response = minMaxQuery(""total"", 0, 3);
+ 
+         assertThat(response.getHits().totalHits(), equalTo(3l));
+         assertThat(response.getHits().hits()[0].id(), equalTo(""4""));
+         ...
+      }",18bec264f95b0d3641b0c9ee38d8c9486cb66ea6,Refactoring,Same as \ref{conflict35_branch} which refactored parsing of an index search query.,Listing below shows a change which was part of the \texttt{\justify{has child}} query parsing refactoring. A score type \texttt{\justify{SUM}} was fetched from a class \texttt{\justify{ScoreType}} which defines mapping of the child documents into a parent document.,"      public void testMinMaxChildren() throws Exception {
+         ...
+         assertThat(response.getHits().hits()[2].id(), equalTo(""2""));
+         assertThat(response.getHits().hits()[2].score(), equalTo(1f));
+ 
+-        response = minMaxQuery(""sum"", 0, 3);
++        response = minMaxQuery(ScoreType.SUM, 0, 3);
+ 
+         assertThat(response.getHits().totalHits(), equalTo(3l));
+         assertThat(response.getHits().hits()[0].id(), equalTo(""4""));
+         ...
+      }"
+496,1b8047e51c02c518c8f9b04d168a849e8d973bcf,80b59e0d66a91c4fdfccd2cfd2432060f5600bd4,5ae00a6129ae1a8a8291c51f5967f81d4db4a85c,Fri Sep 11 09:56:13 CEST 2015,core/src/main/java/org/elasticsearch/discovery/local/LocalDiscovery.java,if (currentState.supersedes(nodeSpecificClusterState)) {,"if (nodeSpecificClusterState.version() < currentState.version() && Objects.equal(nodeSpecificClusterState.nodes().masterNodeId(), currentState.nodes().masterNodeId())) {
+","if (nodeSpecificClusterState.version() < currentState.version() && Objects.equals(nodeSpecificClusterState.nodes().masterNodeId(), currentState.nodes().masterNodeId())) {",,Change of IF statement condition ,14e48824257cf23033c60a7a657145f6ff06ff3c,Library removal,"Objects library for Java which is a helper functions used on any object was removed from the Elasticsearch project codebase. The library is part of Google’s Guava core libraries for Java. Similar to topic branch change in conflict 33, this change was part removing the Guava library from the Elasticsearch codebase.",Listing below shows a change which was part of removing Google’s Guava Objects library. A method \texttt{\justify{equal}} from the Guava Objects library was changed to \texttt{\justify{equals}} which is a common method for Java object.,"    private void publish(LocalDiscovery[] members, ClusterChangedEvent clusterChangedEvent, final BlockingClusterStatePublishResponseHandler publishResponseHandler) {
+        ...
+        try {
+             for (final LocalDiscovery discovery : members) {
+                 if (nodeSpecificClusterState.nodes().localNode() != null) {
+                     ...
+                     discovery.clusterService.submitStateUpdateTask(""local-disco-receive(from master)"", new ProcessedClusterStateNonMasterUpdateTask() {
+                         @Override
+                         public ClusterState execute(ClusterState currentState) {
+-                            if (nodeSpecificClusterState.version() < currentState.version() && Objects.equal(nodeSpecificClusterState.nodes().masterNodeId(), currentState.nodes().masterNodeId())) {
++                            if (nodeSpecificClusterState.version() < currentState.version() && Objects.equals(nodeSpecificClusterState.nodes().masterNodeId(), currentState.nodes().masterNodeId())) {
+                                 return currentState;
+                             }
+                    ...
+                    });
+                } else {
+                    publishResponseHandler.onResponse(discovery.localNode);
+                }
+            }
+            ...
+        } catch (Exception e) {
+            // failure to marshal or un-marshal
+            throw new IllegalStateException(""Cluster state failed to serialize"", e);
+        }
+    }",80b59e0d66a91c4fdfccd2cfd2432060f5600bd4,Refactoring,"Cluster state queue from Zen discovery module which is used for unicast discovery of nodes and selection of a master node in the cluster was refactored so that to provide a buffer for processed cluster states which are not committed yet. The buffer are used to holds the cluster state, then are sent to the Zen discovery module after they are committed. The buffer allows the cluster state to be committed even there is a new cluster state that has been processed.","The listing below shows a change which was part of refactoring cluster state queue in the Zen discovery module. The conditions \texttt{\justify{nodeSpecificClusterState.version() < currentState.version()}} and \texttt{\justify{Objects.equal(nodeSpecificClusterState.nodes().masterNodeId(), currentState.nodes().masterNodeId())}}, which check if a current cluster state’s version is greater than a cluster state’s version for specific node and compare if an object of the cluster state for the specific node is equal to an object of the current cluster state respectively, were replaced with \texttt{\justify{currentState.supersedes(nodeSpecificClusterState)}}, which check if the current cluster state replaces the cluster state’s for the specific node.","    private void publish(LocalDiscovery[] members, ClusterChangedEvent clusterChangedEvent, final BlockingClusterStatePublishResponseHandler publishResponseHandler) {
+        ...
+        try {
+             for (final LocalDiscovery discovery : members) {
+                 if (nodeSpecificClusterState.nodes().localNode() != null) {
+                     ...
+                     discovery.clusterService.submitStateUpdateTask(""local-disco-receive(from master)"", new ProcessedClusterStateNonMasterUpdateTask() {
+                         @Override
+                         public ClusterState execute(ClusterState currentState) {
+-                            if (nodeSpecificClusterState.version() < currentState.version() && Objects.equal(nodeSpecificClusterState.nodes().masterNodeId(), currentState.nodes().masterNodeId())) {
++                            if (currentState.supersedes(nodeSpecificClusterState)) {
+                                 return currentState;
+                             }
+                    ...
+                    });
+                } else {
+                    publishResponseHandler.onResponse(discovery.localNode);
+                }
+            }
+            ...
+        } catch (Exception e) {
+            // failure to marshal or un-marshal
+            throw new IllegalStateException(""Cluster state failed to serialize"", e);
+        }
+    }"
+515,f3d63095dbcc985e24162fbac4ee0d6914dc757d,be638fb6ef894f26464cd9b1702084d00a96eec7,4010e7e9a7148d66d5fb3699c5a042053efea1f4,Fri Aug 14 12:34:26 CEST 2015,core/src/test/java/org/elasticsearch/index/analysis/synonyms/SynonymsAnalysisTest.java,"loadFromClasspath(""org/elasticsearch/index/analysis/synonyms/synonyms.json"").put(""path.home"", home)","loadFromClasspath(""org/elasticsearch/index/analysis/synonyms/synonyms.json"").put(""path.home"", createTempDir().toString())","loadFromStream(json, getClass().getResourceAsStream(json)).put(""path.home"", createTempDir().toString())",,Change of Method call or object creation,6dcfda99e81e1f03ed83da69250bb9a4b7fc938a,Refactoring,"The class loader in the common settings which is used to load resources or classes was removed. The common settings implement creation of the xContent. The change was made to prevent errors as the common settings can be accessed by any plugin or internal API. With this change, the resources or classes are now loaded using normal Java methods such as \texttt{\justify{getClass().getResource()}}.",The listing below shows changes made as part of removing the class loader in the common settings. The method \texttt{\justify{loadFromStream}} is used to load a file instead of \texttt{\justify{loadFromClasspath}}.,"     public void testSynonymsAnalysis() throws IOException {
++        String json = ""/org/elasticsearch/index/analysis/synonyms/synonyms.json"";
+         Settings settings = settingsBuilder().
+-                loadFromClasspath(""org/elasticsearch/index/analysis/synonyms/synonyms.json"")
++                loadFromStream(json, getClass().getResourceAsStream(json))
+                 .put(""path.home"", createTempDir().toString())
+                 .put(IndexMetaData.SETTING_VERSION_CREATED, Version.CURRENT).build();
+         ...
+     }",be638fb6ef894f26464cd9b1702084d00a96eec7,Test improvement,"The method which resolve configuration files path was removed. The method resolves the configuration files by looking into class path, configuration directory and then prefixes configuration directory in the class path. The change corrects the setup of the fake home directories for test configuration files. ","The listing below shows changes which fix setting up fake home directories for test configuration files. The home directory path \texttt{\justify{home}} is created using temporary directory by method \texttt{\justify{createTempDir}}. Then the \texttt{\justify{home}} directory is resolved to configuration path \texttt{\justify{config}}. Thereafter, the configuration files are added to the \texttt{\justify{config}} path.","     public void testSynonymsAnalysis() throws IOException {
++        InputStream synonyms = getClass().getResourceAsStream(""synonyms.txt"");
++        InputStream synonymsWordnet = getClass().getResourceAsStream(""synonyms_wordnet.txt"");
++        Path home = createTempDir();
++        Path config = home.resolve(""config"");
++        Files.createDirectory(config);
++        Files.copy(synonyms, config.resolve(""synonyms.txt""));
++        Files.copy(synonymsWordnet, config.resolve(""synonyms_wordnet.txt""));
++
+         Settings settings = settingsBuilder().
+                 loadFromClasspath(""org/elasticsearch/index/analysis/synonyms/synonyms.json"")
+-                .put(""path.home"", createTempDir().toString())
++                .put(""path.home"", home)
+                 .put(IndexMetaData.SETTING_VERSION_CREATED, Version.CURRENT).build();
+ 
+         Index index = new Index(""test"");
+         ...
+     }"
+527,654dc20897b0e4eb479c5dea64b3a87dc496ba4e,10f80167e66901ce9b208b974d4d8ac2bdc6fa53,bbaf4710cbf056134ec789ed3d6fe7ea2af1a05d,Tue Jun 30 17:38:31 CEST 2015,core/src/main/java/org/elasticsearch/common/io/stream/StreamInput.java,"try {             ObjectInputStream oin = new ObjectInputStream(this);             @SuppressWarnings(""unchecked"")             T object = (T) oin.readObject();             return object;         } catch (ClassNotFoundException e) {             throw new IOException(""failed to deserialize exception"", e);","try {
+    ObjectInputStream oin = new ObjectInputStream(this);
+    return (T) oin.readObject();
+} catch (ClassNotFoundException e) {
+    throw new IOException(""failed to deserialize exception"", e);","if (readBoolean()) {             int key = readVInt();             switch (key) {                 case 0:                     final String name = readString();                     return (T) readException(this, name);                 case 1:                     // this sucks it would be nice to have a better way to construct those?                     String msg = readOptionalString();                     final int idx = msg.indexOf("" (resource="");                     final String resource = msg.substring(idx + "" (resource="".length(), msg.length()-1);                     msg = msg.substring(0, idx);                     return (T) readStackTrace(new CorruptIndexException(msg, resource, readThrowable()), this); // Lucene 5.3 will have getters for all these                 case 2:                     return (T) readStackTrace(new IndexFormatTooNewException(readOptionalString(), -1, -1, -1), this);  // Lucene 5.3 will have getters for all these                 case 3:                     return (T) readStackTrace(new IndexFormatTooOldException(readOptionalString(), -1, -1, -1), this);  // Lucene 5.3 will have getters for all these                 case 4:                     return (T) readStackTrace(new NullPointerException(readOptionalString()), this);                 case 5:                     return (T) readStackTrace(new NumberFormatException(readOptionalString()), this);                 case 6:                     return (T) readStackTrace(new IllegalArgumentException(readOptionalString(), readThrowable()), this);                 case 7:                     return (T) readStackTrace(new IllegalStateException(readOptionalString(), readThrowable()), this);                 case 8:                     return (T) readStackTrace(new EOFException(readOptionalString()), this);                 case 9:                     return (T) readStackTrace(new SecurityException(readOptionalString(), readThrowable()), this);                 case 10:                     return (T) readStackTrace(new StringIndexOutOfBoundsException(readOptionalString()), this);                 case 11:                     return (T) readStackTrace(new ArrayIndexOutOfBoundsException(readOptionalString()), this);                 case 12:                     return (T) readStackTrace(new AssertionError(readOptionalString(), readThrowable()), this);                 case 13:                     return (T) readStackTrace(new FileNotFoundException(readOptionalString()), this);                 case 14:                     final String file = readOptionalString();                     final String other = readOptionalString();                     final String reason = readOptionalString();                     readOptionalString(); // skip the msg - it's composed from file, other and reason                     return (T) readStackTrace(new NoSuchFileException(file, other, reason), this);                 case 15:                     return (T) readStackTrace(new OutOfMemoryError(readOptionalString()), this);                 case 16:                     return (T) readStackTrace(new AlreadyClosedException(readOptionalString(), readThrowable()), this);                 case 17:                     return (T) readStackTrace(new LockObtainFailedException(readOptionalString(), readThrowable()), this);                 default:                     assert false : ""no such exception for id: "" + key;",,Addition and removal of statements ,e7eb9cf4de13620c473512dcbf0259d390ed471d,Refactoring,The dependency on Java serialization which was used to serialize exceptions was removed to prevent problems encountered when upgrading Java Virtual Machines (JVM). The change removed the usage of \texttt{\justify{ObjectInputStream}} and \texttt{\justify{ObjectOutputStream}} to serialize objects and added custom serialization of exceptions.,"Listing below shows changes which add custom serialization of Elasticsearch exceptions. If there is a byte in the stream, a \texttt{\justify{key}} is assigned to the integer stored in the variable-length format. Then for each key, appropriate exception is returned.","     public <T extends Throwable> T readThrowable() throws IOException {
+-        try {
+-            ObjectInputStream oin = new ObjectInputStream(this);
+-            return (T) oin.readObject();
+-        } catch (ClassNotFoundException e) {
+-            throw new IOException(""failed to deserialize exception"", e);
++        if (readBoolean()) {
++            int key = readVInt();
++            switch (key) {
++                case 0:
++                    final String name = readString();
++                    return (T) readException(this, name);
++                case 1:
++                    // this sucks it would be nice to have a better way to construct those?
++                    String msg = readOptionalString();
++                    final int idx = msg.indexOf("" (resource="");
++                    final String resource = msg.substring(idx + "" (resource="".length(), msg.length()-1);
++                    msg = msg.substring(0, idx);
++                    return (T) readStackTrace(new CorruptIndexException(msg, resource, readThrowable()), this); // Lucene 5.3 will have getters for all these
++                case 2:
++                    return (T) readStackTrace(new IndexFormatTooNewException(readOptionalString(), -1, -1, -1), this);  // Lucene 5.3 will have getters for all these
++                case 3:
++                    return (T) readStackTrace(new IndexFormatTooOldException(readOptionalString(), -1, -1, -1), this);  // Lucene 5.3 will have getters for all these
++                case 4:
++                    return (T) readStackTrace(new NullPointerException(readOptionalString()), this);
++                case 5:
++                    return (T) readStackTrace(new NumberFormatException(readOptionalString()), this);
++                case 6:
++                    return (T) readStackTrace(new IllegalArgumentException(readOptionalString(), readThrowable()), this);
++                case 7:
++                    return (T) readStackTrace(new IllegalStateException(readOptionalString(), readThrowable()), this);
++                case 8:
++                    return (T) readStackTrace(new EOFException(readOptionalString()), this);
++                case 9:
++                    return (T) readStackTrace(new SecurityException(readOptionalString(), readThrowable()), this);
++                case 10:
++                    return (T) readStackTrace(new StringIndexOutOfBoundsException(readOptionalString()), this);
++                case 11:
++                    return (T) readStackTrace(new ArrayIndexOutOfBoundsException(readOptionalString()), this);
++                case 12:
++                    return (T) readStackTrace(new AssertionError(readOptionalString(), readThrowable()), this);
++                case 13:
++                    return (T) readStackTrace(new FileNotFoundException(readOptionalString()), this);
++                case 14:
++                    final String file = readOptionalString();
++                    final String other = readOptionalString();
++                    final String reason = readOptionalString();
++                    readOptionalString(); // skip the msg - it's composed from file, other and reason
++                    return (T) readStackTrace(new NoSuchFileException(file, other, reason), this);
++                case 15:
++                    return (T) readStackTrace(new OutOfMemoryError(readOptionalString()), this);
++                case 16:
++                    return (T) readStackTrace(new AlreadyClosedException(readOptionalString(), readThrowable()), this);
++                case 17:
++                    return (T) readStackTrace(new LockObtainFailedException(readOptionalString(), readThrowable()), this);
++                default:
++                    assert false : ""no such exception for id: "" + key;
++            }
+         }
++        return null;
+     }",ff9041dc486adf0a8dec41f80bbfbdd49f97016a,Refactoring,"A new abstraction was introduced to serialize queries by writing the current object into the output stream rather than their Json, and deserialize queries by using their names. This change, similar to \ref{conflict35_branch}, was part of the index query refactoring to separate its parsing in the Elasticsearch and query creation in the Lucene.","The listing below shows changes which were part of abstracting serialization of the index queries. The returned deserialization \texttt{\justify{(T) oin.readObject()}} was refactored to an object, then the object was returned.","     public <T extends Throwable> T readThrowable() throws IOException {
+         try {
+             ObjectInputStream oin = new ObjectInputStream(this);
+-            return (T) oin.readObject();
++            @SuppressWarnings(""unchecked"")
++            T object = (T) oin.readObject();
++            return object;
+         } catch (ClassNotFoundException e) {
+             throw new IOException(""failed to deserialize exception"", e);
+         }
+     }"
+530,9171ff095989646994b5a7ca1a64620ce688dd72,33668a8df0c47db0390ac91baff206416c9ebc8d,f4a143d1387f9b4de841aa2460483157fc9baa5a,Wed Jun 17 11:54:00 CEST 2015,core/src/main/java/org/elasticsearch/index/query/PrefixQueryBuilder.java,builder.startObject(NAME);         if (boost == -1 && rewrite == null && queryName != null) {,builder.startObject(PrefixQueryParser.NAME);         if (boost == -1 && rewrite == null && queryName != null) {,builder.startObject(PrefixQueryParser.NAME);         if (boost == -1 && rewrite == null && queryName == null) {,,Changes in Different statements in the same area ,0a526be3440406e2a1e6bad4b86f4e93f5467029,Bug fix,Support for missing fields in index queries when serializing the queries in Json format was fixed. The wrong logic implemented in some Java API builders resulted to missing fields such as \texttt{\justify{\_name}} which is used to assign or tag a name to the query. ,The listing below shows a change which fixes the wrong logic to support the assingment of names to the index queries. The condition \texttt{\justify{queryName != null}} was changed to \texttt{\justify{queryName == null}}. The change allows the the xContent builder to buid \texttt{\justify{\_name}} field.  ,"     public void doXContent(XContentBuilder builder, Params params) throws IOException {
+         builder.startObject(PrefixQueryParser.NAME);
+-        if (boost == -1 && rewrite == null && queryName != null) {
++        if (boost == -1 && rewrite == null && queryName == null) {
+             builder.field(name, prefix);
+         } else {
+            builder.startObject(name);
+            builder.field(""prefix"", prefix);
+            if (boost != -1) {
+                builder.field(""boost"", boost);
+            }
+            if (rewrite != null) {
+                builder.field(""rewrite"", rewrite);
+            }
+            if (queryName != null) {
+                builder.field(""_name"", queryName);
+            }
+            builder.endObject();
+        }
+        builder.endObject();
+    }",283fe90e7a5e734be14967f569db1ea21e7d8846,Refactoring,The index query parser name which identify the parsers to its corresponding query builder was moved from the parsers to the builders. The change was made to link parser and builder implementations without necessary converting queries to the xContent builders and to ensure the index query parser names are unique.,The listing below shows a change which was part of moving the index parser name to the query builder. The query parser name \texttt{\justify{PrefixQueryParser.NAME}} was changed to \texttt{\justify{NAME}} which was set in the builder.,"     public void doXContent(XContentBuilder builder, Params params) throws IOException {
+-        builder.startObject(PrefixQueryParser.NAME);
++        builder.startObject(NAME);
+         if (boost == -1 && rewrite == null && queryName != null) {
+             builder.field(name, prefix);
+         } else {
+            builder.startObject(name);
+            builder.field(""prefix"", prefix);
+            if (boost != -1) {
+                builder.field(""boost"", boost);
+            }
+            if (rewrite != null) {
+                builder.field(""rewrite"", rewrite);
+            }
+            if (queryName != null) {
+                builder.field(""_name"", queryName);
+            }
+            builder.endObject();
+        }
+        builder.endObject();
+    }"
