@@ -1,5 +1,5 @@
 ## Description of the datasets
-These datasets were extracted from Elasticsearch project ()
+These datasets were extracted from Elasticsearch project
 
 #### 0_Merge_Commits 
 A dataset merge commits in Elasticsearch.
